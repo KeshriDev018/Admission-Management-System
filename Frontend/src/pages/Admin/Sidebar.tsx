@@ -9,17 +9,22 @@ import {
   BarChart3,
   Menu,
   X,
+  TrendingUp,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
-  { icon: BarChart3, label: "Dashboard", to: "/admin" },
+  {
+    icon: TrendingUp,
+    label: "CSAB Admission Insights",
+    to: "/admin/csab-analytics",
+  },
+  { icon: BarChart3, label: "Admission Dashboard", to: "/admin" },
   { icon: Users, label: "Students", to: "/admin/students" },
   { icon: FileCheck, label: "Verifiers", to: "/admin/verifiers" },
   { icon: CreditCard, label: "Accountancy", to: "/admin/accountancy" },
-  { icon: FileText, label: "Reports", to: "/admin/reports" },
   { icon: Settings, label: "Settings", to: "/admin/settings" },
 ];
 

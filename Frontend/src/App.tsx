@@ -15,8 +15,8 @@ import AdminDashboard from "./pages/Admin/AdminDashboard";
 import Students from "./pages/Admin/Students";
 import Verifiers from "./pages/Admin/Verifiers";
 import AdminAccountancy from "./pages/Admin/Accountancy";
-import Reports from "./pages/Admin/Reports";
 import Settings from "./pages/Admin/Settings";
+import CSABAnalytics from "./pages/Admin/CSABAnalytics";
 import VerifierDashboard from "./pages/Verifier/VerifierDashboard";
 import Verified from "./pages/Verifier/verified";
 import Rejected from "./pages/Verifier/rejected";
@@ -44,10 +44,10 @@ const App = () => (
             <Route path="/student/fee" element={<FeePayments />} />
             <Route path="/student/notifications" element={<Notifications />} />
             <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/admin/csab-analytics" element={<CSABAnalytics />} />
             <Route path="/admin/students" element={<Students />} />
             <Route path="/admin/verifiers" element={<Verifiers />} />
             <Route path="/admin/accountancy" element={<AdminAccountancy />} />
-            <Route path="/admin/reports" element={<Reports />} />
             <Route path="/admin/settings" element={<Settings />} />
             <Route path="/verifier" element={<VerifierDashboard />} />
             <Route path="/verifier/verified" element={<Verified />} />
