@@ -13,7 +13,6 @@ usecaseDiagram
         usecase "Fill Application Form" as UC3
         usecase "Upload Documents" as UC4
         usecase "Pay Fees" as UC5
-        usecase "View Application Status" as UC6
 
         %% Verifier Use Cases
         usecase "Verify Documents" as UC7
@@ -35,7 +34,6 @@ usecaseDiagram
     S --> UC3
     S --> UC4
     S --> UC5
-    S --> UC6
 
     V --> UC7
     V --> UC8
