@@ -52,30 +52,48 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
+  e.preventDefault();
+  setIsLoading(true);
 
-    // Simulate login - in real app this would be Supabase auth
-    setTimeout(() => {
+  try {
+    const res = await fetch("http://localhost:8081/api/users/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, role: selectedRole }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      toast.error(data.message || "Login failed");
       setIsLoading(false);
-      toast.success("Login successful!");
+      return;
+    }
 
-      // Navigate based on role
-      switch (selectedRole) {
-        case "admin":
-          navigate("/admin");
-          break;
-        case "verifier":
-          navigate("/verifier");
-          break;
-        case "accountancy":
-          navigate("/accountancy");
-          break;
-        default:
-          navigate("/student");
-      }
-    }, 1500);
-  };
+    toast.success("Login successful!");
+
+    // Navigate based on role
+    switch (data.role) {
+      case "admin":
+        navigate("/admin");
+        break;
+      case "verifier":
+        navigate("/verifier");
+        break;
+      case "accountancy":
+        navigate("/accountancy");
+        break;
+      default:
+        navigate("/student");
+    }
+    console.log(data.role);
+  } catch (err) {
+    toast.error("Server not reachable");
+  } finally {
+    setIsLoading(false);
+  }
+};
+
 
   return (
     <div className="min-h-screen bg-gradient-hero flex">

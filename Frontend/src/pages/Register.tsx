@@ -81,6 +81,7 @@ const Register = () => {
 
   // Form state
   const [formData, setFormData] = useState({
+    jeeApplicationNumber: "",
     // Account
     email: "",
     phone: "",
