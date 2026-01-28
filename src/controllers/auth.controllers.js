@@ -1,6 +1,8 @@
 const userModel = require('../models/user-model');
-
+const jwt = require('jsonwebtoken');
 const bcrypt = require("bcrypt");
+
+const JWT_SECRET = process.env.JWT_SECRET;
 
 module.exports.registerUser = async function (req, res) {
   try {
@@ -28,10 +30,23 @@ module.exports.registerUser = async function (req, res) {
           ...data,
           password: hash,
         });
+        
+        // Generate JWT token
+        const token = jwt.sign(
+          { userId: user._id, email: user.email },
+          JWT_SECRET,
+          { expiresIn: '7d' }
+        );
+        
+        // Send user data (exclude password)
+        const userData = user.toObject();
+        delete userData.password;
+        
         res.status(201).json({
           success: true,
           message: "Registration successful",
-          userId: user._id,
+          token,
+          user: userData,
         });
       });
     });

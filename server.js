@@ -1,7 +1,6 @@
+require("dotenv").config(); // Load environment variables FIRST
+
 const app = require('./src/App');
-
-require("dotenv").config(); // Load environment variables
-
 const connectDB = require("./src/config/mongoose-connection");
 
 connectDB();
