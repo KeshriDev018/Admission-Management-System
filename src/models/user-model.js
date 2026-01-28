@@ -2,6 +2,11 @@ const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema(
   {
+    jeeApplicationNumber: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
     // Account
     email: {
       type: String,
@@ -80,8 +85,13 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    role: {
+      type: String,
+      enum: ["student", "admin", "verifier", "accountancy"],
+      default: "student",
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 module.exports = mongoose.models.user || mongoose.model("user", userSchema);
