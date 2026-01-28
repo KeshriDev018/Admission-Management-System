@@ -12,15 +12,47 @@ import {
   Download,
   ExternalLink,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import StudentSidebar from "./Sidebar";
+import { useAuth } from "@/context/AuthContext";
+import { useEffect } from "react";
 
 const StudentDashboard = () => {
-  const applicationStatus = "pending"; // pending, verified, rejected
-  const feeStatus = "not_paid"; // paid, half_paid, not_paid
+  const { user, isAuthenticated, isLoading } = useAuth();
+  const navigate = useNavigate();
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      navigate("/login");
+    }
+  }, [isAuthenticated, isLoading, navigate]);
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p>Loading...</p>
+      </div>
+    );
+  }
+
+  // Get user initials for avatar
+  const getInitials = (name: string) => {
+    if (!name) return "U";
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const applicationStatus = user?.applicationStatus || "pending"; // pending, verified, rejected
+  const feeStatus = user?.feeStatus || "not_paid"; // paid, half_paid, not_paid
 
   const documents = [
     { name: "Passport Photo", status: "verified" },
@@ -70,10 +102,13 @@ const StudentDashboard = () => {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-xl sm:text-2xl font-bold text-foreground">
-                Welcome, Rahul Kumar
+                Welcome, {user?.fullName || "Student"}
               </h1>
               <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                Application ID: IIITDWD-2025-00142
+                Application ID:{" "}
+                {user?._id
+                  ? `IIITDWD-2025-${user._id.slice(-5).toUpperCase()}`
+                  : "N/A"}
               </p>
             </div>
             <div className="flex items-center gap-2 sm:gap-3">
@@ -85,7 +120,7 @@ const StudentDashboard = () => {
                 <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
               </Button>
               <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground font-semibold text-sm shadow-lg">
-                RK
+                {getInitials(user?.fullName || "")}
               </div>
             </div>
           </div>
@@ -184,8 +219,8 @@ const StudentDashboard = () => {
                         doc.status === "verified"
                           ? "bg-gradient-to-br from-success/20 to-success/5"
                           : doc.status === "pending"
-                          ? "bg-gradient-to-br from-warning/20 to-warning/5"
-                          : "bg-gradient-to-br from-destructive/20 to-destructive/5"
+                            ? "bg-gradient-to-br from-warning/20 to-warning/5"
+                            : "bg-gradient-to-br from-destructive/20 to-destructive/5"
                       }`}
                     >
                       {doc.status === "verified" ? (
