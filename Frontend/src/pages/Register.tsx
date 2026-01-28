@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useAuth } from "@/context/AuthContext";
 
 const registrationPhases = [
   { id: 1, title: "Verification", description: "JEE Main Application Number" },
@@ -69,6 +70,7 @@ const bloodGroups = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
 const Register = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [registrationPhase, setRegistrationPhase] = useState(1); // 1: JEE Verification, 2: Checklist, 3: Registration
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -127,7 +129,7 @@ const Register = () => {
 
   const updateFormData = (
     field: string,
-    value: string | boolean | boolean[]
+    value: string | boolean | boolean[],
   ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
@@ -143,7 +145,7 @@ const Register = () => {
     const jeePattern = /^JM\d{12}$/i;
     if (!jeePattern.test(jeeApplicationNumber)) {
       setVerificationError(
-        "Invalid format. JEE Main Application Number should be in format: JM followed by 12 digits (e.g., JM250123456789)"
+        "Invalid format. JEE Main Application Number should be in format: JM followed by 12 digits (e.g., JM250123456789)",
       );
       return;
     }
@@ -167,7 +169,7 @@ const Register = () => {
         setRegistrationPhase(2); // Move to checklist phase
       } else {
         setVerificationError(
-          "JEE Application Number not found in our database. Please check and try again."
+          "JEE Application Number not found in our database. Please check and try again.",
         );
       }
       setIsVerifying(false);
@@ -206,7 +208,7 @@ const Register = () => {
       ];
 
       const missingDocs = requiredDocs.filter(
-        (doc) => !formData[doc.key as keyof typeof formData]
+        (doc) => !formData[doc.key as keyof typeof formData],
       );
 
       // Check if at least one fee payment receipt is uploaded
@@ -240,13 +242,35 @@ const Register = () => {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      toast.success("Application submitted successfully!");
+
+    try {
+      const res = await fetch("http://localhost:8081/api/users/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.message || "Registration failed");
+        setIsLoading(false);
+        return;
+      }
+
+      // Save token and user data to context
+      login(data.token, data.user);
+      toast.success("Registration successful!");
       navigate("/student");
-    }, 2000);
+    } catch (err) {
+      console.error(err);
+      toast.error("Backend not reachable. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const renderStepContent = () => {
@@ -683,7 +707,7 @@ const Register = () => {
                   onClick={() => {
                     // TODO: Add actual PDF download link
                     toast.info(
-                      "Performance in Class 12th form will be downloaded"
+                      "Performance in Class 12th form will be downloaded",
                     );
                   }}
                 >
@@ -920,7 +944,7 @@ const Register = () => {
                                 variant="outline"
                                 onClick={() => {
                                   toast.info(
-                                    `Viewing Fee Receipt #${index + 1}`
+                                    `Viewing Fee Receipt #${index + 1}`,
                                   );
                                   // TODO: Implement actual document viewer
                                 }}
@@ -936,11 +960,11 @@ const Register = () => {
                                   const current =
                                     formData.feePaymentReceiptsUploaded as boolean[];
                                   const updated = current.filter(
-                                    (_, i) => i !== index
+                                    (_, i) => i !== index,
                                   );
                                   updateFormData(
                                     "feePaymentReceiptsUploaded",
-                                    updated
+                                    updated,
                                   );
                                   toast.info("Receipt removed");
                                 }}
@@ -949,7 +973,7 @@ const Register = () => {
                               </Button>
                             </div>
                           </div>
-                        )
+                        ),
                       )
                     )}
                   </div>
@@ -985,12 +1009,20 @@ const Register = () => {
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                   <div>
-                    <span className="text-muted-foreground font-medium">Email:</span>{" "}
-                    <span className="text-foreground">{formData.email || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Email:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.email || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Phone:</span>{" "}
-                    <span className="text-foreground">{formData.phone || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Phone:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.phone || "Not provided"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1003,60 +1035,116 @@ const Register = () => {
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                   <div>
-                    <span className="text-muted-foreground font-medium">Full Name:</span>{" "}
-                    <span className="text-foreground">{formData.fullName || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Full Name:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.fullName || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Father's Name:</span>{" "}
-                    <span className="text-foreground">{formData.fatherName || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Father's Name:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.fatherName || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Mother's Name:</span>{" "}
-                    <span className="text-foreground">{formData.motherName || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Mother's Name:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.motherName || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Parent's Contact:</span>{" "}
-                    <span className="text-foreground">{formData.parentsContact || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Parent's Contact:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.parentsContact || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Parent's Email:</span>{" "}
-                    <span className="text-foreground">{formData.parentsEmail || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Parent's Email:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.parentsEmail || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Date of Birth:</span>{" "}
-                    <span className="text-foreground">{formData.dob || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Date of Birth:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.dob || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Gender:</span>{" "}
-                    <span className="text-foreground capitalize">{formData.gender || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Gender:
+                    </span>{" "}
+                    <span className="text-foreground capitalize">
+                      {formData.gender || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Category:</span>{" "}
-                    <span className="text-foreground uppercase">{formData.category || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Category:
+                    </span>{" "}
+                    <span className="text-foreground uppercase">
+                      {formData.category || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Blood Group:</span>{" "}
-                    <span className="text-foreground">{formData.bloodGroup || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Blood Group:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.bloodGroup || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Aadhar Number:</span>{" "}
-                    <span className="text-foreground">{formData.aadhar || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Aadhar Number:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.aadhar || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">State:</span>{" "}
-                    <span className="text-foreground capitalize">{formData.state || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      State:
+                    </span>{" "}
+                    <span className="text-foreground capitalize">
+                      {formData.state || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Branch Allocated:</span>{" "}
-                    <span className="text-foreground">{formData.branch || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Branch Allocated:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.branch || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Seat Allocated Through:</span>{" "}
-                    <span className="text-foreground">{formData.seatAllocated || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Seat Allocated Through:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.seatAllocated || "Not provided"}
+                    </span>
                   </div>
                   <div className="md:col-span-2">
-                    <span className="text-muted-foreground font-medium">Address:</span>{" "}
-                    <span className="text-foreground">{formData.address || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Address:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.address || "Not provided"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1070,55 +1158,101 @@ const Register = () => {
                 <div className="space-y-4">
                   {/* Class 10 */}
                   <div className="border-b border-border pb-3">
-                    <p className="text-sm font-medium text-foreground mb-2">Class 10th</p>
+                    <p className="text-sm font-medium text-foreground mb-2">
+                      Class 10th
+                    </p>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                       <div>
-                        <span className="text-muted-foreground font-medium">Board:</span>{" "}
-                        <span className="text-foreground">{formData.board10 || "Not provided"}</span>
+                        <span className="text-muted-foreground font-medium">
+                          Board:
+                        </span>{" "}
+                        <span className="text-foreground">
+                          {formData.board10 || "Not provided"}
+                        </span>
                       </div>
                       <div>
-                        <span className="text-muted-foreground font-medium">Year:</span>{" "}
-                        <span className="text-foreground">{formData.year10 || "Not provided"}</span>
+                        <span className="text-muted-foreground font-medium">
+                          Year:
+                        </span>{" "}
+                        <span className="text-foreground">
+                          {formData.year10 || "Not provided"}
+                        </span>
                       </div>
                       <div>
-                        <span className="text-muted-foreground font-medium">Percentage:</span>{" "}
-                        <span className="text-foreground">{formData.percentage10 ? `${formData.percentage10}%` : "Not provided"}</span>
+                        <span className="text-muted-foreground font-medium">
+                          Percentage:
+                        </span>{" "}
+                        <span className="text-foreground">
+                          {formData.percentage10
+                            ? `${formData.percentage10}%`
+                            : "Not provided"}
+                        </span>
                       </div>
                     </div>
                   </div>
                   {/* Class 12 */}
                   <div className="border-b border-border pb-3">
-                    <p className="text-sm font-medium text-foreground mb-2">Class 12th / Intermediate</p>
+                    <p className="text-sm font-medium text-foreground mb-2">
+                      Class 12th / Intermediate
+                    </p>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                       <div>
-                        <span className="text-muted-foreground font-medium">Board:</span>{" "}
-                        <span className="text-foreground">{formData.board12 || "Not provided"}</span>
+                        <span className="text-muted-foreground font-medium">
+                          Board:
+                        </span>{" "}
+                        <span className="text-foreground">
+                          {formData.board12 || "Not provided"}
+                        </span>
                       </div>
                       <div>
-                        <span className="text-muted-foreground font-medium">Stream:</span>{" "}
-                        <span className="text-foreground">{formData.stream12 || "Not provided"}</span>
+                        <span className="text-muted-foreground font-medium">
+                          Stream:
+                        </span>{" "}
+                        <span className="text-foreground">
+                          {formData.stream12 || "Not provided"}
+                        </span>
                       </div>
                       <div>
-                        <span className="text-muted-foreground font-medium">Year:</span>{" "}
-                        <span className="text-foreground">{formData.year12 || "Not provided"}</span>
+                        <span className="text-muted-foreground font-medium">
+                          Year:
+                        </span>{" "}
+                        <span className="text-foreground">
+                          {formData.year12 || "Not provided"}
+                        </span>
                       </div>
                       <div>
-                        <span className="text-muted-foreground font-medium">Percentage:</span>{" "}
-                        <span className="text-foreground">{formData.percentage12 ? `${formData.percentage12}%` : "Not provided"}</span>
+                        <span className="text-muted-foreground font-medium">
+                          Percentage:
+                        </span>{" "}
+                        <span className="text-foreground">
+                          {formData.percentage12
+                            ? `${formData.percentage12}%`
+                            : "Not provided"}
+                        </span>
                       </div>
                     </div>
                   </div>
                   {/* JEE */}
                   <div>
-                    <p className="text-sm font-medium text-foreground mb-2">JEE Main</p>
+                    <p className="text-sm font-medium text-foreground mb-2">
+                      JEE Main
+                    </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                       <div>
-                        <span className="text-muted-foreground font-medium">JEE Application Number:</span>{" "}
-                        <span className="text-foreground">{jeeApplicationNumber || "Not provided"}</span>
+                        <span className="text-muted-foreground font-medium">
+                          JEE Application Number:
+                        </span>{" "}
+                        <span className="text-foreground">
+                          {jeeApplicationNumber || "Not provided"}
+                        </span>
                       </div>
                       <div>
-                        <span className="text-muted-foreground font-medium">JEE Rank:</span>{" "}
-                        <span className="text-foreground">{formData.jeeRank || "Not provided"}</span>
+                        <span className="text-muted-foreground font-medium">
+                          JEE Rank:
+                        </span>{" "}
+                        <span className="text-foreground">
+                          {formData.jeeRank || "Not provided"}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1133,16 +1267,46 @@ const Register = () => {
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                   {[
-                    { key: "photographUploaded", label: "Passport Size Photograph" },
-                    { key: "admissionLetterUploaded", label: "Provisional Admission Letter" },
-                    { key: "marksheet10Uploaded", label: "Class 10th Marksheet" },
-                    { key: "marksheet12Uploaded", label: "Class 12th Marksheet" },
-                    { key: "jeeRankCardUploaded", label: "JEE Mains Rank Card" },
-                    { key: "casteCertificateUploaded", label: "Caste Certificate" },
-                    { key: "incomeCertificateUploaded", label: "Income Certificate" },
-                    { key: "medicalCertificateUploaded", label: "Medical Certificate" },
-                    { key: "antiRaggingFormUploaded", label: "Anti-Ragging Form" },
-                    { key: "performance12FormUploaded", label: "Performance in Class 12th Form" },
+                    {
+                      key: "photographUploaded",
+                      label: "Passport Size Photograph",
+                    },
+                    {
+                      key: "admissionLetterUploaded",
+                      label: "Provisional Admission Letter",
+                    },
+                    {
+                      key: "marksheet10Uploaded",
+                      label: "Class 10th Marksheet",
+                    },
+                    {
+                      key: "marksheet12Uploaded",
+                      label: "Class 12th Marksheet",
+                    },
+                    {
+                      key: "jeeRankCardUploaded",
+                      label: "JEE Mains Rank Card",
+                    },
+                    {
+                      key: "casteCertificateUploaded",
+                      label: "Caste Certificate",
+                    },
+                    {
+                      key: "incomeCertificateUploaded",
+                      label: "Income Certificate",
+                    },
+                    {
+                      key: "medicalCertificateUploaded",
+                      label: "Medical Certificate",
+                    },
+                    {
+                      key: "antiRaggingFormUploaded",
+                      label: "Anti-Ragging Form",
+                    },
+                    {
+                      key: "performance12FormUploaded",
+                      label: "Performance in Class 12th Form",
+                    },
                     { key: "aadharPhotoUploaded", label: "Aadhar Card" },
                   ].map((doc) => (
                     <div key={doc.key} className="flex items-center gap-2">
@@ -1151,19 +1315,38 @@ const Register = () => {
                       ) : (
                         <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
                       )}
-                      <span className={formData[doc.key as keyof typeof formData] ? "text-foreground" : "text-muted-foreground"}>
+                      <span
+                        className={
+                          formData[doc.key as keyof typeof formData]
+                            ? "text-foreground"
+                            : "text-muted-foreground"
+                        }
+                      >
                         {doc.label}
                       </span>
                     </div>
                   ))}
                   <div className="flex items-center gap-2">
-                    {(formData.feePaymentReceiptsUploaded as boolean[]).length > 0 ? (
+                    {(formData.feePaymentReceiptsUploaded as boolean[]).length >
+                    0 ? (
                       <Check className="w-4 h-4 text-success flex-shrink-0" />
                     ) : (
                       <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
                     )}
-                    <span className={(formData.feePaymentReceiptsUploaded as boolean[]).length > 0 ? "text-foreground" : "text-muted-foreground"}>
-                      Fee Payment Receipts ({(formData.feePaymentReceiptsUploaded as boolean[]).length} uploaded)
+                    <span
+                      className={
+                        (formData.feePaymentReceiptsUploaded as boolean[])
+                          .length > 0
+                          ? "text-foreground"
+                          : "text-muted-foreground"
+                      }
+                    >
+                      Fee Payment Receipts (
+                      {
+                        (formData.feePaymentReceiptsUploaded as boolean[])
+                          .length
+                      }{" "}
+                      uploaded)
                     </span>
                   </div>
                 </div>
@@ -1184,9 +1367,9 @@ const Register = () => {
                 className="text-sm text-amber-900 cursor-pointer font-medium"
               >
                 I hereby declare that all information provided above is true and
-                correct to the best of my knowledge. I understand that providing false 
-                information may result in immediate cancellation of my admission and 
-                further legal action.
+                correct to the best of my knowledge. I understand that providing
+                false information may result in immediate cancellation of my
+                admission and further legal action.
               </label>
             </div>
           </div>
