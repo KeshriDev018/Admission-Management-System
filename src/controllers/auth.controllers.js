@@ -64,7 +64,7 @@ module.exports.loginUser = async function (req, res) {
         .status(400)
         .json({ message: "Email and password are required" });
     }
-    // Find user by email
+    
     const user = await userModel.findOne({ email });
     if (!user) {
       return res.status(401).json({ message: "Invalid email or password" });
