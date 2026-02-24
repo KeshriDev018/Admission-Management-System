@@ -299,7 +299,7 @@ const ContactSection = () => {
           className="text-center mt-16"
         >
           <motion.a
-            href="https://www.google.com/maps/place/Indian+Institute+of+Information+Technology+Dharwad/@15.3777,75.0234,17z"
+            href="https://www.google.com/maps/place/Indian+Institute+of+Information+Technology+(IIIT),+Dharwad/@15.3854258,75.0248285,15.5z/data=!4m6!3m5!1s0x3bb8d3a4bc7f5c91:0xf0fc456099430c57!8m2!3d15.3939686!4d75.0267651!16s%2Fg%2F11bwgvgs24?entry=ttu&g_ep=EgoyMDI2MDIyMi4wIKXMDSoASAFQAw%3D%3D"
             target="_blank"
             rel="noopener noreferrer"
             whileHover={{ scale: 1.05 }}
