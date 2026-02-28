@@ -5,8 +5,10 @@ import {
   getMyProfile,
   getDocumentProgress,
   reuploadDocument,
+  reuploadFeeReceipt,
   uploadPayment,
-  verifyEligibility
+  verifyEligibility,
+  uploadDocuments,
 } from "../controllers/student.controller.js";
 
 import { protect } from "../middlewares/authMiddleware.js";
@@ -23,6 +25,25 @@ router.post("/verify-eligibility", verifyEligibility);
 // =====================================================
 
 router.post("/register", registerStudent);
+
+router.post(
+  "/upload-documents",
+  upload.fields([
+    { name: "photo", maxCount: 1 },
+    { name: "admissionLetter", maxCount: 1 },
+    { name: "class10Marksheet", maxCount: 1 },
+    { name: "class12Marksheet", maxCount: 1 },
+    { name: "jeeRankCard", maxCount: 1 },
+    { name: "casteCertificate", maxCount: 1 },
+    { name: "incomeCertificate", maxCount: 1 },
+    { name: "medicalCertificate", maxCount: 1 },
+    { name: "antiRaggingForm", maxCount: 1 },
+    { name: "performanceForm", maxCount: 1 },
+    { name: "aadharCard", maxCount: 1 },
+    { name: "feeReceipts", maxCount: 5 },
+  ]),
+  uploadDocuments,
+);
 
 // =====================================================
 // 🔐 ALL ROUTES BELOW REQUIRE STUDENT LOGIN
@@ -41,22 +62,7 @@ router.get("/me", getMyProfile);
 // (for dashboard: 3/5 verified etc.)
 // =====================================================
 
-router.get("/documents/progress", getDocumentProgress);
-
-// =====================================================
-// 📤 UPLOAD DOCUMENT (Initial Upload)
-// =====================================================
-
-router.post(
-  "/documents/upload/:docType",
-  upload.single("file"),
-  async (req, res) => {
-    res.json({
-      message: "Document uploaded successfully",
-      url: req.file.path, // ⭐ Cloudinary URL
-    });
-  },
-);
+router.get("/documents/progress", authorize("student"), getDocumentProgress);
 
 // =====================================================
 // 🔁 RE-UPLOAD REJECTED DOCUMENT
@@ -64,15 +70,31 @@ router.post(
 
 router.put(
   "/documents/reupload/:docType",
+  authorize("student"),
   upload.single("file"),
   reuploadDocument,
 );
 
+// =====================================================
+// 🔁 RE-UPLOAD REJECTED FEE RECEIPT
+// =====================================================
+
+router.put(
+  "/documents/reupload-receipt/:index",
+  authorize("student"),
+  upload.single("file"),
+  reuploadFeeReceipt,
+);
 
 // =====================================================
 // 💰 UPLOAD PAYMENT RECEIPT
 // =====================================================
 
-router.post("/payments/upload", upload.single("receipt"), uploadPayment);
+router.post(
+  "/payments/upload",
+  authorize("student"),
+  upload.single("receipt"),
+  uploadPayment,
+);
 
 export default router;

@@ -2,9 +2,9 @@ import User from "../models/user.model.js";
 import Student from "../models/studentProfile.model.js";
 
 export const assignVerifier = async () => {
-  const verifiers = await User.find({ role: "verifier" });
+  const verifiers = await User.find({ role: "verifier", isActive: true });
 
-  if (!verifiers.length) throw new Error("No verifiers available");
+  if (!verifiers.length) throw new Error("No active verifiers available");
 
   let selected = null;
   let minLoad = Infinity;
@@ -27,9 +27,11 @@ export const assignVerifier = async () => {
 export const assignAccountant = async () => {
   const accountants = await User.find({
     role: "accountancy",
+    isActive: true,
   });
 
-  if (!accountants.length) throw new Error("No accountancy staff available");
+  if (!accountants.length)
+    throw new Error("No active accountancy staff available");
 
   let selected = null;
   let minLoad = Infinity;

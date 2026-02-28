@@ -1,175 +1,167 @@
 import { motion } from "framer-motion";
-import { Search, ChevronLeft, ChevronRight, CheckCircle } from "lucide-react";
-import { useState, useMemo } from "react";
+import {
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle,
+  Loader2,
+  AlertCircle,
+  User,
+  Mail,
+  Eye,
+  FileText,
+  MessageSquare,
+} from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import VerifierSidebar from "./Sidebar";
-
-type VerifiedStudent = {
-  id: string;
-  name: string;
-  email: string;
-  rollNo: string;
-  program: string;
-  department: string;
-  verificationDate: string;
-  documents: string[];
-  status: "Verified";
-};
+import { verifierAPI } from "@/lib/api";
+import { toast } from "sonner";
 
 const Verified = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [students, setStudents] = useState<any[]>([]);
+  const [selectedStudent, setSelectedStudent] = useState<any | null>(null);
+  const [selectedStudentDetails, setSelectedStudentDetails] = useState<
+    any | null
+  >(null);
+  const [isDocumentDialogOpen, setIsDocumentDialogOpen] = useState(false);
   const itemsPerPage = 10;
 
-  // Demo verified students data
-  const verifiedStudents: VerifiedStudent[] = [
-    {
-      id: "v-1",
-      name: "Rajesh Kumar",
-      email: "rajesh.kumar@student.com",
-      rollNo: "CSE-001",
-      program: "B.Tech",
-      department: "Computer Science",
-      verificationDate: new Date().toISOString(),
-      documents: ["Passport Photo", "Class 10 Marksheet", "Class 12 Marksheet"],
-      status: "Verified",
-    },
-    {
-      id: "v-2",
-      name: "Priya Sharma",
-      email: "priya.sharma@student.com",
-      rollNo: "ENG-002",
-      program: "B.Tech",
-      department: "Electronics",
-      verificationDate: new Date().toISOString(),
-      documents: ["Passport Photo", "Class 10 Marksheet"],
-      status: "Verified",
-    },
-    {
-      id: "v-3",
-      name: "Amit Patel",
-      email: "amit.patel@student.com",
-      rollNo: "CSE-003",
-      program: "B.Sc",
-      department: "Computer Science",
-      verificationDate: new Date().toISOString(),
-      documents: ["Passport Photo", "Class 12 Marksheet"],
-      status: "Verified",
-    },
-    {
-      id: "v-4",
-      name: "Neha Gupta",
-      email: "neha.gupta@student.com",
-      rollNo: "ME-004",
-      program: "B.Tech",
-      department: "Mechanical",
-      verificationDate: new Date().toISOString(),
-      documents: ["Passport Photo", "Class 10 Marksheet", "Class 12 Marksheet"],
-      status: "Verified",
-    },
-    {
-      id: "v-5",
-      name: "Vikram Singh",
-      email: "vikram.singh@student.com",
-      rollNo: "EC-005",
-      program: "B.Tech",
-      department: "Electronics",
-      verificationDate: new Date().toISOString(),
-      documents: ["Passport Photo"],
-      status: "Verified",
-    },
-    {
-      id: "v-6",
-      name: "Sneha Reddy",
-      email: "sneha.reddy@student.com",
-      rollNo: "CSE-006",
-      program: "B.Tech",
-      department: "Computer Science",
-      verificationDate: new Date().toISOString(),
-      documents: ["Passport Photo", "Class 10 Marksheet", "Class 12 Marksheet"],
-      status: "Verified",
-    },
-    {
-      id: "v-7",
-      name: "Arjun Verma",
-      email: "arjun.verma@student.com",
-      rollNo: "ME-007",
-      program: "Diploma",
-      department: "Mechanical",
-      verificationDate: new Date().toISOString(),
-      documents: ["Passport Photo", "Class 10 Marksheet"],
-      status: "Verified",
-    },
-    {
-      id: "v-8",
-      name: "Divya Nair",
-      email: "divya.nair@student.com",
-      rollNo: "CSE-008",
-      program: "B.Tech",
-      department: "Computer Science",
-      verificationDate: new Date().toISOString(),
-      documents: ["Passport Photo", "Class 12 Marksheet"],
-      status: "Verified",
-    },
-    {
-      id: "v-9",
-      name: "Rohit Yadav",
-      email: "rohit.yadav@student.com",
-      rollNo: "ENG-009",
-      program: "B.Tech",
-      department: "Electronics",
-      verificationDate: new Date().toISOString(),
-      documents: ["Passport Photo", "Class 10 Marksheet", "Class 12 Marksheet"],
-      status: "Verified",
-    },
-    {
-      id: "v-10",
-      name: "Ananya Das",
-      email: "ananya.das@student.com",
-      rollNo: "CSE-010",
-      program: "B.Sc",
-      department: "Computer Science",
-      verificationDate: new Date().toISOString(),
-      documents: ["Passport Photo"],
-      status: "Verified",
-    },
-    {
-      id: "v-11",
-      name: "Sanjay Kumar",
-      email: "sanjay.kumar@student.com",
-      rollNo: "ME-011",
-      program: "B.Tech",
-      department: "Mechanical",
-      verificationDate: new Date().toISOString(),
-      documents: ["Passport Photo", "Class 10 Marksheet", "Class 12 Marksheet"],
-      status: "Verified",
-    },
-    {
-      id: "v-12",
-      name: "Pooja Mishra",
-      email: "pooja.mishra@student.com",
-      rollNo: "CSE-012",
-      program: "B.Tech",
-      department: "Computer Science",
-      verificationDate: new Date().toISOString(),
-      documents: ["Passport Photo", "Class 12 Marksheet"],
-      status: "Verified",
-    },
-  ];
+  useEffect(() => {
+    fetchVerifiedStudents();
+  }, []);
+
+  const fetchVerifiedStudents = async () => {
+    try {
+      setLoading(true);
+      const data = await verifierAPI.getMyVerifiedStudents();
+      setStudents(data);
+    } catch (error: any) {
+      console.error("Failed to fetch verified students:", error);
+      toast.error(
+        error.response?.data?.message || "Failed to load verified students",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleViewDocuments = async (student: any) => {
+    try {
+      setSelectedStudent(student);
+      setIsDocumentDialogOpen(true);
+
+      // Fetch full student details
+      const details = await verifierAPI.getAssignedStudentDetails(student._id);
+      setSelectedStudentDetails(details);
+    } catch (error: any) {
+      console.error("Failed to fetch student details:", error);
+      toast.error(
+        error.response?.data?.message || "Failed to load student details",
+      );
+    }
+  };
+
+  const buildDocumentList = () => {
+    if (!selectedStudentDetails) return [];
+
+    const docs = selectedStudentDetails.documents;
+    const docList: any[] = [];
+
+    // Regular documents
+    const docFields = [
+      { key: "photo", name: "Passport Photo" },
+      { key: "admissionLetter", name: "Admission Letter" },
+      { key: "class10Marksheet", name: "Class 10 Marksheet" },
+      { key: "class12Marksheet", name: "Class 12 Marksheet" },
+      { key: "jeeRankCard", name: "JEE Rank Card" },
+      { key: "casteCertificate", name: "Caste Certificate" },
+      { key: "incomeCertificate", name: "Income Certificate" },
+      { key: "medicalCertificate", name: "Medical Certificate" },
+      { key: "antiRaggingForm", name: "Anti-Ragging Form" },
+      { key: "performanceForm", name: "Performance Form" },
+      { key: "aadharCard", name: "Aadhar Card" },
+    ];
+
+    docFields.forEach((field) => {
+      const doc = docs[field.key];
+      if (doc && doc.url) {
+        docList.push({
+          key: field.key,
+          name: field.name,
+          url: doc.url,
+          status: doc.status,
+          remark: doc.remark,
+        });
+      }
+    });
+
+    // Fee receipts
+    docs.feeReceipts?.forEach((receipt: any, index: number) => {
+      if (receipt && receipt.url) {
+        docList.push({
+          key: `feeReceipt-${index}`,
+          name: `Fee Receipt ${index + 1}`,
+          url: receipt.url,
+          status: receipt.status,
+          remark: receipt.remark,
+        });
+      }
+    });
+
+    return docList;
+  };
+
+  const getDocStatusBadge = (status: string) => {
+    switch (status) {
+      case "verified":
+        return (
+          <Badge className="bg-success/10 text-success border-success/20">
+            <CheckCircle className="w-3 h-3 mr-1" />
+            Verified
+          </Badge>
+        );
+      case "rejected":
+        return (
+          <Badge className="bg-destructive/10 text-destructive border-destructive/20">
+            Rejected
+          </Badge>
+        );
+      case "pending":
+        return (
+          <Badge className="bg-warning/10 text-warning border-warning/20">
+            Pending
+          </Badge>
+        );
+      default:
+        return null;
+    }
+  };
 
   // Filter students based on search query
   const filteredStudents = useMemo(() => {
-    return verifiedStudents.filter((student) => {
+    return students.filter((student) => {
       const query = searchQuery.toLowerCase();
       return (
-        student.name.toLowerCase().includes(query) ||
-        student.email.toLowerCase().includes(query) ||
-        student.rollNo.toLowerCase().includes(query) ||
-        student.department.toLowerCase().includes(query)
+        student.personal?.fullName?.toLowerCase().includes(query) ||
+        student.user?.email?.toLowerCase().includes(query) ||
+        student.jeeApplicationNumber?.toLowerCase().includes(query) ||
+        student.personal?.branchAllocated?.toLowerCase().includes(query)
       );
     });
-  }, [searchQuery]);
+  }, [students, searchQuery]);
 
   // Paginate students
   const totalPages = Math.ceil(filteredStudents.length / itemsPerPage);
@@ -186,6 +178,47 @@ const Verified = () => {
   const handleNext = () => {
     if (currentPage < totalPages) setCurrentPage(currentPage + 1);
   };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "document_verified":
+        return (
+          <Badge className="bg-success/10 text-success border-success/20">
+            Doc Verified
+          </Badge>
+        );
+      case "payment_pending":
+        return (
+          <Badge className="bg-warning/10 text-warning border-warning/20">
+            Payment Pending
+          </Badge>
+        );
+      case "admitted":
+        return (
+          <Badge className="bg-blue-500/10 text-blue-500 border-blue-500/20">
+            Admitted
+          </Badge>
+        );
+      default:
+        return null;
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <VerifierSidebar />
+        <main className="lg:ml-64 min-h-screen pt-20 lg:pt-0 flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
+            <p className="text-muted-foreground">
+              Loading verified students...
+            </p>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -237,7 +270,7 @@ const Verified = () => {
                     Total Verified
                   </div>
                   <div className="text-xl sm:text-2xl font-bold text-green-600">
-                    {verifiedStudents.length}
+                    {students.length}
                   </div>
                 </div>
                 <div className="p-2.5 sm:p-3 bg-muted rounded-lg">
@@ -273,22 +306,25 @@ const Verified = () => {
                         Name
                       </th>
                       <th className="pb-2 sm:pb-3 px-2 sm:px-4 font-semibold">
-                        Roll No
+                        JEE Number
                       </th>
                       <th className="pb-2 sm:pb-3 px-2 sm:px-4 font-semibold">
                         Email
                       </th>
                       <th className="pb-2 sm:pb-3 px-2 sm:px-4 font-semibold">
-                        Program
+                        Category
                       </th>
                       <th className="pb-2 sm:pb-3 px-2 sm:px-4 font-semibold">
-                        Department
+                        Branch
                       </th>
                       <th className="pb-2 sm:pb-3 px-2 sm:px-4 font-semibold">
-                        Documents
+                        Status
                       </th>
                       <th className="pb-2 sm:pb-3 px-2 sm:px-4 font-semibold">
-                        Verified Date
+                        Date
+                      </th>
+                      <th className="pb-2 sm:pb-3 px-2 sm:px-4 font-semibold">
+                        Action
                       </th>
                     </tr>
                   </thead>
@@ -297,7 +333,7 @@ const Verified = () => {
                       <tr>
                         <td
                           className="py-6 sm:py-8 text-center text-xs sm:text-sm text-muted-foreground"
-                          colSpan={7}
+                          colSpan={8}
                         >
                           No verified students found matching your search.
                         </td>
@@ -305,48 +341,56 @@ const Verified = () => {
                     ) : (
                       paginatedStudents.map((student, idx) => (
                         <motion.tr
-                          key={student.id}
+                          key={student._id}
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           transition={{ delay: idx * 0.05 }}
                           className="border-t border-border hover:bg-muted/50 transition-colors"
                         >
                           <td className="py-3 sm:py-4 px-2 sm:px-4">
-                            <div className="flex items-center gap-1.5 sm:gap-2">
-                              <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 text-green-600" />
+                            <div className="flex items-center gap-2">
+                              <User className="w-4 h-4 text-success" />
                               <span className="font-medium text-xs sm:text-sm">
-                                {student.name}
+                                {student.personal?.fullName}
                               </span>
                             </div>
                           </td>
                           <td className="py-3 sm:py-4 px-2 sm:px-4 text-xs sm:text-sm">
-                            {student.rollNo}
+                            {student.jeeApplicationNumber}
                           </td>
                           <td className="py-3 sm:py-4 px-2 sm:px-4 text-xs sm:text-sm">
-                            {student.email}
-                          </td>
-                          <td className="py-3 sm:py-4 px-2 sm:px-4">
-                            <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 rounded-full text-[10px] sm:text-xs font-medium">
-                              {student.program}
-                            </span>
-                          </td>
-                          <td className="py-3 sm:py-4 px-2 sm:px-4 text-xs sm:text-sm">
-                            {student.department}
-                          </td>
-                          <td className="py-3 sm:py-4 px-2 sm:px-4">
-                            <div className="flex gap-1 flex-wrap">
-                              {student.documents.map((doc) => (
-                                <span
-                                  key={doc}
-                                  className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 rounded text-[10px] sm:text-xs"
-                                >
-                                  {doc.split(" ")[0]}
-                                </span>
-                              ))}
+                            <div className="flex items-center gap-1">
+                              <Mail className="w-3 h-3 text-muted-foreground" />
+                              {student.user?.email}
                             </div>
                           </td>
+                          <td className="py-3 sm:py-4 px-2 sm:px-4">
+                            <Badge variant="outline" className="text-xs">
+                              {student.personal?.category}
+                            </Badge>
+                          </td>
                           <td className="py-3 sm:py-4 px-2 sm:px-4 text-xs sm:text-sm">
-                            {formatDate(student.verificationDate)}
+                            {student.personal?.branchAllocated}
+                          </td>
+                          <td className="py-3 sm:py-4 px-2 sm:px-4">
+                            {getStatusBadge(student.admissionStatus)}
+                          </td>
+                          <td className="py-3 sm:py-4 px-2 sm:px-4 text-xs sm:text-sm">
+                            {formatDate(student.createdAt)}
+                          </td>
+                          <td className="py-3 sm:py-4 px-2 sm:px-4">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleViewDocuments(student)}
+                              className="h-7 sm:h-8 text-xs sm:text-sm"
+                            >
+                              <Eye className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                              <span className="hidden sm:inline">
+                                View Docs
+                              </span>
+                              <span className="sm:hidden">View</span>
+                            </Button>
                           </td>
                         </motion.tr>
                       ))
@@ -409,6 +453,82 @@ const Verified = () => {
           </motion.div>
         </div>
       </main>
+
+      {/* Document Viewer Dialog */}
+      <Dialog
+        open={isDocumentDialogOpen}
+        onOpenChange={setIsDocumentDialogOpen}
+      >
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Verified Documents - {selectedStudent?.personal?.fullName}
+            </DialogTitle>
+            <DialogDescription>
+              JEE Application No: {selectedStudent?.jeeApplicationNumber} |
+              Email: {selectedStudent?.user?.email}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-4">
+            {/* Documents */}
+            <div>
+              <p className="text-sm font-semibold text-foreground mb-3">
+                Uploaded Documents
+              </p>
+              {!selectedStudentDetails ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {buildDocumentList().map((doc) => (
+                    <motion.div
+                      key={doc.key}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="border border-border rounded-lg p-4"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                          <FileText className="w-5 h-5 text-blue-600" />
+                          <div>
+                            <p className="font-medium text-sm">{doc.name}</p>
+                            {doc.status && (
+                              <div className="mt-1">
+                                {getDocStatusBadge(doc.status)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <a
+                          href={doc.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Button variant="outline" size="sm">
+                            <Eye className="w-4 h-4 mr-1" />
+                            View
+                          </Button>
+                        </a>
+                      </div>
+
+                      {doc.status === "rejected" && doc.remark && (
+                        <div className="flex items-start gap-2 p-3 bg-destructive/5 rounded-lg mt-2">
+                          <MessageSquare className="w-4 h-4 text-destructive mt-0.5" />
+                          <p className="text-sm text-destructive">
+                            {doc.remark}
+                          </p>
+                        </div>
+                      )}
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

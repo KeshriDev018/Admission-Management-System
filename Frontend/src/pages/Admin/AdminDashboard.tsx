@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   GraduationCap,
@@ -13,6 +14,7 @@ import {
   Download,
   Filter,
   Search,
+  Loader2,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import AdminSidebar from "./Sidebar";
@@ -32,92 +34,165 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
+import { adminAPI } from "@/lib/api";
+import { toast } from "sonner";
 
-const categoryData = [
-  { name: "General", value: 1250, color: "hsl(222, 65%, 25%)" },
-  { name: "OBC-NCL", value: 980, color: "hsl(38, 92%, 50%)" },
-  { name: "SC", value: 450, color: "hsl(142, 76%, 36%)" },
-  { name: "ST", value: 320, color: "hsl(199, 89%, 48%)" },
-  { name: "EWS", value: 280, color: "hsl(0, 84%, 60%)" },
-];
+// Category colors for charts
+const CATEGORY_COLORS: Record<string, string> = {
+  General: "hsl(222, 65%, 25%)",
+  "OBC-NCL": "hsl(38, 92%, 50%)",
+  SC: "hsl(142, 76%, 36%)",
+  ST: "hsl(199, 89%, 48%)",
+  EWS: "hsl(0, 84%, 60%)",
+};
 
-const stateData = [
-  { state: "Karnataka", count: 850 },
-  { state: "Maharashtra", count: 620 },
-  { state: "Telangana", count: 480 },
-  { state: "Tamil Nadu", count: 410 },
-  { state: "AP", count: 380 },
-  { state: "Kerala", count: 290 },
-];
-
-const feeData = [
-  { status: "Paid", count: 1850, color: "hsl(142, 76%, 36%)" },
-  { status: "Half Paid", count: 620, color: "hsl(38, 92%, 50%)" },
-  { status: "Not Paid", count: 810, color: "hsl(0, 84%, 60%)" },
-];
-
-const recentApplications = [
-  {
-    id: "IIITDWD-2025-00156",
-    name: "Priya Sharma",
-    status: "pending",
-    category: "General",
-    state: "Karnataka",
-  },
-  {
-    id: "IIITDWD-2025-00155",
-    name: "Amit Kumar",
-    status: "verified",
-    category: "OBC-NCL",
-    state: "Maharashtra",
-  },
-  {
-    id: "IIITDWD-2025-00154",
-    name: "Sara Ahmed",
-    status: "rejected",
-    category: "General",
-    state: "Telangana",
-  },
-  {
-    id: "IIITDWD-2025-00153",
-    name: "Ravi Patel",
-    status: "pending",
-    category: "EWS",
-    state: "Gujarat",
-  },
-  {
-    id: "IIITDWD-2025-00152",
-    name: "Ananya Reddy",
-    status: "verified",
-    category: "SC",
-    state: "AP",
-  },
-];
+const GENDER_COLORS: Record<string, string> = {
+  Male: "hsl(222, 47%, 50%)",
+  Female: "hsl(340, 82%, 52%)",
+  Other: "hsl(280, 60%, 50%)",
+};
 
 const AdminDashboard = () => {
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "verified":
-        return (
-          <Badge className="bg-success/10 text-success border-success/20">
-            Verified
-          </Badge>
-        );
-      case "pending":
-        return (
-          <Badge className="bg-warning/10 text-warning border-warning/20">
-            Pending
-          </Badge>
-        );
-      case "rejected":
-        return (
-          <Badge className="bg-destructive/10 text-destructive border-destructive/20">
-            Rejected
-          </Badge>
-        );
-      default:
-        return null;
+  const [isLoading, setIsLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      setIsLoading(true);
+      const data = await adminAPI.getDashboardStats();
+      setDashboardData(data);
+    } catch (error: any) {
+      console.error("Failed to fetch dashboard data:", error);
+      toast.error(
+        error.response?.data?.message || "Failed to load dashboard data",
+      );
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  // Transform category stats for chart
+  const categoryData =
+    dashboardData?.categoryStats?.map((item: any) => ({
+      name: item._id || "Unknown",
+      value: item.count,
+      color: CATEGORY_COLORS[item._id] || "hsl(0, 0%, 50%)",
+    })) || [];
+
+  // Transform state stats for chart (backend already limits to top 6)
+  const stateData =
+    dashboardData?.stateStats?.map((item: any) => ({
+      state: item._id || "Unknown",
+      count: item.count,
+    })) || [];
+
+  // Transform gender stats
+  const genderData =
+    dashboardData?.genderStats?.map((item: any) => ({
+      name: item._id || "Unknown",
+      value: item.count,
+      color: GENDER_COLORS[item._id] || "hsl(0, 0%, 50%)",
+    })) || [];
+
+  // Fee payment data
+  const feeData = dashboardData?.paymentStats
+    ? [
+        {
+          status: "Paid",
+          count: dashboardData.paymentStats.paid,
+          color: "hsl(142, 76%, 36%)",
+        },
+        {
+          status: "Half Paid",
+          count: dashboardData.paymentStats.halfPaid,
+          color: "hsl(38, 92%, 50%)",
+        },
+        {
+          status: "Not Paid",
+          count: dashboardData.paymentStats.notPaid,
+          color: "hsl(0, 84%, 60%)",
+        },
+      ]
+    : [];
+
+  // Recent applications
+  const recentApplications = dashboardData?.recentApplications || [];
+
+  // Calculate gender percentages
+  const totalGender = genderData.reduce(
+    (sum: number, item: any) => sum + item.value,
+    0,
+  );
+  const maleData = genderData.find((g: any) => g.name === "Male");
+  const femaleData = genderData.find((g: any) => g.name === "Female");
+  const malePercentage =
+    totalGender > 0 && maleData
+      ? Math.round((maleData.value / totalGender) * 100)
+      : 0;
+  const femalePercentage =
+    totalGender > 0 && femaleData
+      ? Math.round((femaleData.value / totalGender) * 100)
+      : 0;
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <AdminSidebar />
+        <div className="lg:ml-64 flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const getStatusBadge = (status: string) => {
+    const statusMap: Record<string, { label: string; className: string }> = {
+      pending_verification: {
+        label: "Pending",
+        className: "bg-warning/10 text-warning border-warning/20",
+      },
+      verified: {
+        label: "Verified",
+        className: "bg-success/10 text-success border-success/20",
+      },
+      document_verified: {
+        label: "Doc Verified",
+        className: "bg-info/10 text-info border-info/20",
+      },
+      payment_pending: {
+        label: "Payment Pending",
+        className: "bg-orange-500/10 text-orange-500 border-orange-500/20",
+      },
+      admitted: {
+        label: "Admitted",
+        className: "bg-success/10 text-success border-success/20",
+      },
+      rejected: {
+        label: "Rejected",
+        className: "bg-destructive/10 text-destructive border-destructive/20",
+      },
+    };
+
+    const statusInfo = statusMap[status] || {
+      label: status,
+      className: "bg-muted/10 text-muted-foreground border-muted/20",
+    };
+
+    return <Badge className={statusInfo.className}>{statusInfo.label}</Badge>;
+  };
+
+  // Get summary stats safely
+  const summary = dashboardData?.summary || {
+    totalApplications: 0,
+    verified: 0,
+    pending: 0,
+    todayApps: 0,
   };
 
   return (
@@ -160,28 +235,28 @@ const AdminDashboard = () => {
               {
                 icon: Users,
                 label: "Total Applications",
-                value: "3,280",
+                value: summary.totalApplications.toLocaleString(),
                 change: "+12%",
                 color: "bg-primary/10 text-primary",
               },
               {
                 icon: FileCheck,
                 label: "Verified",
-                value: "1,850",
+                value: summary.verified.toLocaleString(),
                 change: "+8%",
                 color: "bg-success/10 text-success",
               },
               {
                 icon: TrendingUp,
                 label: "Pending",
-                value: "1,120",
+                value: summary.pending.toLocaleString(),
                 change: "-5%",
                 color: "bg-warning/10 text-warning",
               },
               {
                 icon: UserPlus,
                 label: "Today's Apps",
-                value: "42",
+                value: summary.todayApps.toLocaleString(),
                 change: "+23%",
                 color: "bg-info/10 text-info",
               },
@@ -306,33 +381,36 @@ const AdminDashboard = () => {
                 Fee Payment Status
               </h3>
               <div className="space-y-3 sm:space-y-4">
-                {feeData.map((item) => (
-                  <div key={item.status} className="flex items-center gap-4">
-                    <div
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: item.color }}
-                    />
-                    <div className="flex-1">
-                      <div className="flex justify-between mb-1">
-                        <span className="text-sm font-medium text-foreground">
-                          {item.status}
-                        </span>
-                        <span className="text-sm text-muted-foreground">
-                          {item.count}
-                        </span>
-                      </div>
-                      <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${(item.count / 3280) * 100}%`,
-                            backgroundColor: item.color,
-                          }}
-                        />
+                {feeData.map((item) => {
+                  const totalApps = summary.totalApplications || 1;
+                  return (
+                    <div key={item.status} className="flex items-center gap-4">
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: item.color }}
+                      />
+                      <div className="flex-1">
+                        <div className="flex justify-between mb-1">
+                          <span className="text-sm font-medium text-foreground">
+                            {item.status}
+                          </span>
+                          <span className="text-sm text-muted-foreground">
+                            {item.count}
+                          </span>
+                        </div>
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${(item.count / totalApps) * 100}%`,
+                              backgroundColor: item.color,
+                            }}
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </motion.div>
 
@@ -347,24 +425,41 @@ const AdminDashboard = () => {
                 Gender Distribution
               </h3>
               <div className="flex items-center justify-center gap-4 sm:gap-8 h-32">
-                <div className="text-center">
-                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-2">
-                    <span className="text-2xl font-bold text-primary">62%</span>
+                {maleData && (
+                  <div className="text-center">
+                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-2">
+                      <span className="text-2xl font-bold text-primary">
+                        {malePercentage}%
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground">Male</p>
+                    <p className="text-lg font-semibold text-foreground">
+                      {maleData.value.toLocaleString()}
+                    </p>
                   </div>
-                  <p className="text-sm text-muted-foreground">Male</p>
-                  <p className="text-lg font-semibold text-foreground">2,034</p>
-                </div>
-                <div className="text-center">
-                  <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-2">
-                    <span className="text-2xl font-bold text-accent">38%</span>
+                )}
+                {femaleData && (
+                  <div className="text-center">
+                    <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-2">
+                      <span className="text-2xl font-bold text-accent">
+                        {femalePercentage}%
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground">Female</p>
+                    <p className="text-lg font-semibold text-foreground">
+                      {femaleData.value.toLocaleString()}
+                    </p>
                   </div>
-                  <p className="text-sm text-muted-foreground">Female</p>
-                  <p className="text-lg font-semibold text-foreground">1,246</p>
-                </div>
+                )}
+                {!maleData && !femaleData && (
+                  <p className="text-sm text-muted-foreground">
+                    No data available
+                  </p>
+                )}
               </div>
             </motion.div>
 
-            {/* Area Type */}
+            {/* Area Type - Hidden since backend doesn't provide this data */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -372,22 +467,41 @@ const AdminDashboard = () => {
               className="bg-gradient-to-br from-card to-card/50 border border-border rounded-2xl p-4 sm:p-6 shadow-lg sm:col-span-2 lg:col-span-1"
             >
               <h3 className="text-base sm:text-lg font-semibold text-foreground mb-3 sm:mb-4">
-                Rural vs Urban
+                Application Status
               </h3>
               <div className="flex items-center justify-center gap-4 sm:gap-8 h-32">
                 <div className="text-center">
                   <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-2">
-                    <span className="text-2xl font-bold text-success">45%</span>
+                    <span className="text-2xl font-bold text-success">
+                      {summary.totalApplications > 0
+                        ? Math.round(
+                            (summary.verified / summary.totalApplications) *
+                              100,
+                          )
+                        : 0}
+                      %
+                    </span>
                   </div>
-                  <p className="text-sm text-muted-foreground">Rural</p>
-                  <p className="text-lg font-semibold text-foreground">1,476</p>
+                  <p className="text-sm text-muted-foreground">Verified</p>
+                  <p className="text-lg font-semibold text-foreground">
+                    {summary.verified.toLocaleString()}
+                  </p>
                 </div>
                 <div className="text-center">
                   <div className="w-16 h-16 rounded-full bg-info/10 flex items-center justify-center mx-auto mb-2">
-                    <span className="text-2xl font-bold text-info">55%</span>
+                    <span className="text-2xl font-bold text-info">
+                      {summary.totalApplications > 0
+                        ? Math.round(
+                            (summary.pending / summary.totalApplications) * 100,
+                          )
+                        : 0}
+                      %
+                    </span>
                   </div>
-                  <p className="text-sm text-muted-foreground">Urban</p>
-                  <p className="text-lg font-semibold text-foreground">1,804</p>
+                  <p className="text-sm text-muted-foreground">Pending</p>
+                  <p className="text-lg font-semibold text-foreground">
+                    {summary.pending.toLocaleString()}
+                  </p>
                 </div>
               </div>
             </motion.div>
@@ -447,37 +561,50 @@ const AdminDashboard = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {recentApplications.map((app) => (
-                    <tr
-                      key={app.id}
-                      className="hover:bg-muted/30 transition-colors"
-                    >
-                      <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-foreground">
-                        {app.id}
-                      </td>
-                      <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-foreground">
-                        {app.name}
-                      </td>
-                      <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-muted-foreground">
-                        {app.category}
-                      </td>
-                      <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-muted-foreground">
-                        {app.state}
-                      </td>
-                      <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                        {getStatusBadge(app.status)}
-                      </td>
-                      <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs h-7 sm:h-8"
-                        >
-                          View
-                        </Button>
+                  {recentApplications.length > 0 ? (
+                    recentApplications.map((app: any) => (
+                      <tr
+                        key={app._id}
+                        className="hover:bg-muted/30 transition-colors"
+                      >
+                        <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-foreground">
+                          {app.jeeApplicationNumber || "N/A"}
+                        </td>
+                        <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-foreground">
+                          {app.personal?.fullName || app.user?.name || "N/A"}
+                        </td>
+                        <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-muted-foreground">
+                          {app.personal?.category || "N/A"}
+                        </td>
+                        <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-muted-foreground">
+                          {app.personal?.state || "N/A"}
+                        </td>
+                        <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                          {getStatusBadge(app.admissionStatus)}
+                        </td>
+                        <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                          <Link to="/admin/students">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-xs h-7 sm:h-8"
+                            >
+                              View
+                            </Button>
+                          </Link>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="px-4 sm:px-6 py-8 text-center text-sm text-muted-foreground"
+                      >
+                        No recent applications
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>

@@ -19,26 +19,8 @@ const AccountancySidebar = () => {
   const navItems = [
     {
       icon: LayoutDashboard,
-      label: "Dashboard",
+      label: "Payment Verification",
       link: "/accountancy",
-    },
-    {
-      icon: Clock,
-      label: "Pending Payments",
-      count: 12,
-      link: "/accountancy/pending",
-    },
-    {
-      icon: CheckCircle,
-      label: "Approved",
-      count: 45,
-      link: "/accountancy/approved",
-    },
-    {
-      icon: XCircle,
-      label: "Rejected",
-      count: 8,
-      link: "/accountancy/rejected",
     },
   ];
 

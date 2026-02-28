@@ -42,7 +42,7 @@ export const approvePayment = async (req, res) => {
   try {
     const { studentId, paymentId } = req.params;
 
-    // 🔒 Ownership check (admin override allowed)
+    //Ownership check (admin override allowed)
     const query =
       req.user.role === "admin"
         ? { _id: studentId }
@@ -55,7 +55,7 @@ export const approvePayment = async (req, res) => {
         message: "Student not found or not assigned to you",
       });
 
-    // 🧠 ATOMIC UPDATE — approve ONLY if still pending
+    //ATOMIC UPDATE — approve ONLY if still pending
     const result = await Student.updateOne(
       {
         _id: studentId,
@@ -71,7 +71,7 @@ export const approvePayment = async (req, res) => {
       },
     );
 
-    // ❌ If nothing updated → already processed or invalid
+    // If nothing updated → already processed or invalid
     if (result.modifiedCount === 0) {
       const exists = await Student.exists({
         _id: studentId,
@@ -88,10 +88,10 @@ export const approvePayment = async (req, res) => {
       });
     }
 
-    // 🔄 Re-fetch updated student
+    // Re-fetch updated student
     const student = await Student.findById(studentId);
 
-    // 🧮 Recalculate totals from APPROVED payments ONLY
+    //Recalculate totals from APPROVED payments ONLY
     const approvedTotal = student.payments
       .filter((p) => p.status === "approved")
       .reduce((sum, p) => sum + p.amount, 0);
@@ -103,7 +103,7 @@ export const approvePayment = async (req, res) => {
       0,
     );
 
-    // 🏁 Final admission status
+    //Final admission status
     if (student.fee.remaining === 0) {
       student.admissionStatus = "admitted";
     } else {
@@ -158,13 +158,13 @@ export const rejectPayment = async (req, res) => {
 
     const amount = payment.amount;
 
-    // ❌ Reject payment
+    //  Reject payment
     payment.status = "rejected";
     payment.remark = remark || "Payment rejected";
     payment.verifiedBy = req.user.id;
     payment.verifiedAt = new Date();
 
-    // 🔥 Update fee summary
+    // Update fee summary
     student.fee.pendingVerification -= amount;
 
     // Stay in payment stage
@@ -175,6 +175,41 @@ export const rejectPayment = async (req, res) => {
     res.json({
       message: "Payment rejected",
     });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const getMyAdmittedStudents = async (req, res) => {
+  try {
+    const students = await Student.find({
+      assignedAccountant: req.user.id,
+      admissionStatus: "admitted",
+    })
+      .select(
+        "jeeApplicationNumber personal.fullName personal.branchAllocated fee createdAt",
+      )
+      .populate("user", "email");
+
+    res.json(students);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const getMyRejectedPaymentStudents = async (req, res) => {
+  try {
+    const students = await Student.find({
+      assignedAccountant: req.user.id,
+      admissionStatus: "payment_pending",
+      payments: { $elemMatch: { status: "rejected" } },
+    })
+      .select(
+        "jeeApplicationNumber personal.fullName personal.branchAllocated fee createdAt",
+      )
+      .populate("user", "email");
+
+    res.json(students);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

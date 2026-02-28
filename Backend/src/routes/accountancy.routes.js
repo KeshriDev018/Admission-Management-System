@@ -5,6 +5,8 @@ import {
   getPaymentDetails,
   approvePayment,
   rejectPayment,
+  getMyAdmittedStudents,
+  getMyRejectedPaymentStudents,
 } from "../controllers/accountancy.controller.js";
 
 import { protect } from "../middlewares/authMiddleware.js";
@@ -15,10 +17,16 @@ const router = express.Router();
 // 🔒 Accountancy + Admin access
 router.use(protect, authorize("accountancy", "admin"));
 
-// 📋 Assigned payment cases
+// 🟡 Pending payment cases (WORK TAB)
 router.get("/my-payments", getMyPaymentStudents);
 
-// 📄 View full payment details
+// 🔴 Rejected payments (needs re-upload)
+router.get("/my-rejected-payments", getMyRejectedPaymentStudents);
+
+// 🟢 Completed admissions (fully paid)
+router.get("/my-admitted", getMyAdmittedStudents);
+
+// 📄 View full payment details of a student
 router.get("/student/:id", getPaymentDetails);
 
 // 💰 Approve payment

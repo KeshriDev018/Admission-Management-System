@@ -3,11 +3,6 @@ import csv from "csv-parser";
 
 import Csab from "../models/CsabAllotment.model.js";
 
-
-
-
-
-
 export const uploadCsabData = async (req, res) => {
   try {
     if (!req.file)
@@ -20,7 +15,7 @@ export const uploadCsabData = async (req, res) => {
     fs.createReadStream(req.file.path)
       .pipe(csv())
       .on("data", (data) => {
-        // 🔥 Map CSV columns → DB fields EXACTLY
+        //Map CSV columns → DB fields EXACTLY
         results.push({
           jeeApplicationNumber: data["JEE(Main) App No"],
           name: data["Name"],
@@ -68,16 +63,11 @@ export const uploadCsabData = async (req, res) => {
           // Insert new batch
           await Csab.insertMany(results);
 
-          // 🔥 Enable registration globally
-          await Settings.updateOne(
-            { key: "registrationEnabled" },
-            { value: true },
-            { upsert: true },
-          );
-
           res.json({
             message: "CSAB data uploaded successfully",
             totalRecords: results.length,
+            fileName: req.file.originalname, // ADD THIS
+            uploadDate: new Date(),
           });
         } catch (err) {
           res.status(500).json({ message: err.message });
@@ -130,32 +120,49 @@ export const getCsabMetrics = async (req, res) => {
 
 export const getDistributionStats = async (req, res) => {
   try {
+    const { program, category, gender, state, round } = req.query;
+
+    // Build filter object
+    const filter = {};
+    if (program) filter.program = program;
+    if (category) filter.category = category;
+    if (gender) filter.gender = gender;
+    if (state) filter.stateOfEligibility = state;
+    if (round) filter.round = round;
+
     const genderStats = await Csab.aggregate([
+      ...(Object.keys(filter).length > 0 ? [{ $match: filter }] : []),
       { $group: { _id: "$gender", count: { $sum: 1 } } },
     ]);
 
     const categoryStats = await Csab.aggregate([
+      ...(Object.keys(filter).length > 0 ? [{ $match: filter }] : []),
       { $group: { _id: "$category", count: { $sum: 1 } } },
     ]);
 
     const stateStats = await Csab.aggregate([
+      ...(Object.keys(filter).length > 0 ? [{ $match: filter }] : []),
       { $group: { _id: "$stateOfEligibility", count: { $sum: 1 } } },
     ]);
 
     const programStats = await Csab.aggregate([
+      ...(Object.keys(filter).length > 0 ? [{ $match: filter }] : []),
       { $group: { _id: "$program", count: { $sum: 1 } } },
     ]);
 
     const quotaStats = await Csab.aggregate([
+      ...(Object.keys(filter).length > 0 ? [{ $match: filter }] : []),
       { $group: { _id: "$quota", count: { $sum: 1 } } },
     ]);
 
     const seatPoolStats = await Csab.aggregate([
+      ...(Object.keys(filter).length > 0 ? [{ $match: filter }] : []),
       { $group: { _id: "$seatPool", count: { $sum: 1 } } },
     ]);
 
     // ⭐ Opening vs Closing Ranks
     const openingClosingRanks = await Csab.aggregate([
+      ...(Object.keys(filter).length > 0 ? [{ $match: filter }] : []),
       {
         $group: {
           _id: "$program",
@@ -167,14 +174,43 @@ export const getDistributionStats = async (req, res) => {
       { $sort: { openingRank: 1 } },
     ]);
 
+    // Seat configuration from environment variables
+    const seatConfig = {
+      "Computer Science and Engineering": parseInt(
+        process.env.CSAB_CSE_SEATS || "0",
+      ),
+      "Data Science and Artificial Intelligence": parseInt(
+        process.env.CSAB_DSAI_SEATS || "0",
+      ),
+      "Electronics and Communication Engineering": parseInt(
+        process.env.CSAB_ECE_SEATS || "0",
+      ),
+    };
+
+    // Add total seats to program stats
+    const programStatsWithSeats = programStats.map((prog) => ({
+      _id: prog._id,
+      count: prog.count,
+      totalSeats: seatConfig[prog._id] || 0,
+    }));
+
+    // Add total seats to opening/closing ranks
+    const ranksWithSeats = openingClosingRanks.map((prog) => ({
+      _id: prog._id,
+      openingRank: prog.openingRank,
+      closingRank: prog.closingRank,
+      totalAllotted: prog.totalAllotted,
+      totalSeats: seatConfig[prog._id] || 0,
+    }));
+
     res.json({
       genderStats,
       categoryStats,
       stateStats,
-      programStats,
+      programStats: programStatsWithSeats,
       quotaStats,
       seatPoolStats,
-      openingClosingRanks,
+      openingClosingRanks: ranksWithSeats,
     });
   } catch (err) {
     res.status(500).json({
@@ -182,8 +218,6 @@ export const getDistributionStats = async (req, res) => {
     });
   }
 };
-
-
 
 export const getCsabRecords = async (req, res) => {
   try {
@@ -229,10 +263,9 @@ export const getCsabRecords = async (req, res) => {
 
 import { Parser } from "json2csv";
 
-
 export const exportCsabCsv = async (req, res) => {
   try {
-    const { program, category, gender, state, round } = req.query;
+    const { program, category, gender, state } = req.query;
 
     const filter = {};
 
@@ -240,7 +273,6 @@ export const exportCsabCsv = async (req, res) => {
     if (category) filter.category = category;
     if (gender) filter.gender = gender;
     if (state) filter.stateOfEligibility = state;
-    if (round) filter.round = round;
 
     const data = await Csab.find(filter).lean();
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -25,9 +25,18 @@ import {
   AlertCircle,
   CheckSquare,
   Eye,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { csabAPI, registrationAPI } from "@/lib/api";
 
 const registrationPhases = [
   { id: 1, title: "Verification", description: "JEE Main Application Number" },
@@ -76,6 +85,17 @@ const Register = () => {
   const [jeeApplicationNumber, setJeeApplicationNumber] = useState("");
   const [verificationError, setVerificationError] = useState("");
   const [checklistAcknowledged, setChecklistAcknowledged] = useState(false);
+  const [isRegistrationOpen, setIsRegistrationOpen] = useState<boolean | null>(
+    null,
+  );
+  const [eligibilityData, setEligibilityData] = useState<any>(null);
+  const [documentFiles, setDocumentFiles] = useState<{
+    [key: string]: File | null;
+  }>({});
+  const [previewDocument, setPreviewDocument] = useState<{
+    file: File;
+    name: string;
+  } | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -127,7 +147,7 @@ const Register = () => {
 
   const updateFormData = (
     field: string,
-    value: string | boolean | boolean[]
+    value: string | boolean | boolean[],
   ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
@@ -139,39 +159,44 @@ const Register = () => {
       return;
     }
 
-    // Basic format validation (JEE Main format: JM followed by 12 digits)
-    const jeePattern = /^JM\d{12}$/i;
-    if (!jeePattern.test(jeeApplicationNumber)) {
-      setVerificationError(
-        "Invalid format. JEE Main Application Number should be in format: JM followed by 12 digits (e.g., JM250123456789)"
-      );
+    // Check if registration is open first
+    if (isRegistrationOpen === false) {
+      setVerificationError("Registrations are not open yet");
       return;
     }
 
     setIsVerifying(true);
     setVerificationError("");
 
-    // Simulate API call to verify JEE Application Number
-    setTimeout(() => {
-      // TODO: Replace with actual API call
-      // const response = await fetch('/api/verify-jee-application', {
-      //   method: 'POST',
-      //   body: JSON.stringify({ applicationNumber: jeeApplicationNumber })
-      // });
+    try {
+      const data =
+        await registrationAPI.verifyEligibility(jeeApplicationNumber);
 
-      // Dummy verification - accept all valid format JEE numbers
-      const isValid = true; // In real implementation, this comes from API
+      if (data.eligible) {
+        setEligibilityData(data.data);
 
-      if (isValid) {
+        // Pre-fill form data with CSAB data
+        if (data.data) {
+          if (data.data.name) updateFormData("fullName", data.data.name);
+          if (data.data.category)
+            updateFormData("category", data.data.category.toLowerCase());
+          if (data.data.state) updateFormData("state", data.data.state);
+          if (data.data.program) updateFormData("branch", data.data.program);
+        }
+
         toast.success("JEE Application Number verified successfully!");
         setRegistrationPhase(2); // Move to checklist phase
-      } else {
-        setVerificationError(
-          "JEE Application Number not found in our database. Please check and try again."
-        );
       }
+    } catch (error: any) {
+      console.error("Verification failed:", error);
+      const errorMessage =
+        error.response?.data?.message ||
+        "Verification failed. Please try again.";
+      setVerificationError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
       setIsVerifying(false);
-    }, 1500);
+    }
   };
 
   const handleChecklistContinue = () => {
@@ -206,7 +231,7 @@ const Register = () => {
       ];
 
       const missingDocs = requiredDocs.filter(
-        (doc) => !formData[doc.key as keyof typeof formData]
+        (doc) => !formData[doc.key as keyof typeof formData],
       );
 
       // Check if at least one fee payment receipt is uploaded
@@ -240,13 +265,216 @@ const Register = () => {
     }
   };
 
-  const handleSubmit = () => {
+  // Handle file upload
+  const handleFileUpload = (documentKey: string, file: File | null) => {
+    if (file) {
+      // Validate file size (2MB max)
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error("File size must be less than 2MB");
+        return;
+      }
+
+      // Validate file type
+      const allowedTypes = [
+        "application/pdf",
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+      ];
+      if (!allowedTypes.includes(file.type)) {
+        toast.error("Only PDF, JPG, and PNG files are allowed");
+        return;
+      }
+
+      setDocumentFiles((prev) => ({ ...prev, [documentKey]: file }));
+      updateFormData(documentKey, true);
+      toast.success("File uploaded successfully");
+    }
+  };
+
+  // Handle file removal
+  const handleFileRemove = (documentKey: string) => {
+    setDocumentFiles((prev) => {
+      const updated = { ...prev };
+      delete updated[documentKey];
+      return updated;
+    });
+    updateFormData(documentKey, false);
+    toast.info("File removed");
+  };
+
+  // Handle document preview
+  const handleDocumentPreview = (documentKey: string, documentName: string) => {
+    const file = documentFiles[documentKey];
+    if (file) {
+      setPreviewDocument({ name: documentName, file });
+    } else {
+      toast.error("Document not found");
+    }
+  };
+
+  // LocalStorage - Save form data on changes
+  useEffect(() => {
+    if (registrationPhase === 3) {
+      const dataToSave = {
+        formData,
+        jeeApplicationNumber,
+        currentStep,
+        registrationPhase,
+        eligibilityData,
+      };
+      localStorage.setItem("registrationData", JSON.stringify(dataToSave));
+    }
+  }, [
+    formData,
+    jeeApplicationNumber,
+    currentStep,
+    registrationPhase,
+    eligibilityData,
+  ]);
+
+  // LocalStorage - Restore data on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("registrationData");
+    if (saved) {
+      try {
+        const {
+          formData: savedFormData,
+          jeeApplicationNumber: savedJee,
+          currentStep: savedStep,
+          registrationPhase: savedPhase,
+          eligibilityData: savedEligibility,
+        } = JSON.parse(saved);
+        if (
+          window.confirm(
+            "Found saved registration data. Would you like to restore it?",
+          )
+        ) {
+          setFormData(savedFormData);
+          setJeeApplicationNumber(savedJee);
+          setCurrentStep(savedStep);
+          setRegistrationPhase(savedPhase);
+          setEligibilityData(savedEligibility);
+          toast.success("Registration data restored");
+        } else {
+          localStorage.removeItem("registrationData");
+        }
+      } catch (error) {
+        console.error("Error restoring data:", error);
+        localStorage.removeItem("registrationData");
+      }
+    }
+  }, []);
+
+  const handleSubmit = async () => {
     setIsLoading(true);
-    setTimeout(() => {
+
+    try {
+      // Step 1: Register student
+      const registrationData = {
+        jeeApplicationNumber,
+        account: {
+          email: formData.email,
+          phone: formData.phone,
+          password: formData.password,
+          confirmPassword: formData.confirmPassword,
+        },
+        personal: {
+          fullName: formData.fullName,
+          fatherName: formData.fatherName,
+          motherName: formData.motherName,
+          parentContact: formData.parentsContact,
+          parentEmail: formData.parentsEmail,
+          dob: formData.dob,
+          gender: formData.gender,
+          category: formData.category,
+          bloodGroup: formData.bloodGroup,
+          aadharNumber: formData.aadhar,
+          state: formData.state,
+          branchAllocated: formData.branch,
+          seatAllocatedThrough: formData.seatAllocated,
+          address: formData.address,
+        },
+        academic: {
+          class10: {
+            board: formData.board10,
+            percentage: formData.percentage10,
+            year: parseInt(formData.year10) || new Date().getFullYear(),
+          },
+          class12: {
+            board: formData.board12,
+            stream: formData.stream12,
+            percentage: formData.percentage12,
+            year: parseInt(formData.year12) || new Date().getFullYear(),
+          },
+          jeeRank: parseInt(formData.jeeRank) || 0,
+        },
+        termsAccepted: formData.termsAccepted,
+      };
+
+      const registerResponse =
+        await registrationAPI.registerStudent(registrationData);
+      toast.success(
+        registerResponse.message || "Student registered successfully!",
+      );
+
+      // Step 2: Upload documents
+      const docFormData = new FormData();
+      docFormData.append("jeeApplicationNumber", jeeApplicationNumber);
+
+      // Map document keys to expected backend field names
+      const documentMapping: { [key: string]: string } = {
+        photographUploaded: "photo",
+        admissionLetterUploaded: "admissionLetter",
+        marksheet10Uploaded: "class10Marksheet",
+        marksheet12Uploaded: "class12Marksheet",
+        jeeRankCardUploaded: "jeeRankCard",
+        casteCertificateUploaded: "casteCertificate",
+        incomeCertificateUploaded: "incomeCertificate",
+        medicalCertificateUploaded: "medicalCertificate",
+        antiRaggingFormUploaded: "antiRaggingForm",
+        performance12FormUploaded: "performanceForm",
+        aadharPhotoUploaded: "aadharCard",
+      };
+
+      // Append single documents
+      Object.entries(documentMapping).forEach(([formKey, backendKey]) => {
+        if (documentFiles[formKey]) {
+          docFormData.append(backendKey, documentFiles[formKey] as File);
+        }
+      });
+
+      // Append fee receipts (multiple)
+      const feeReceipts = formData.feePaymentReceiptsUploaded as boolean[];
+      feeReceipts.forEach((_, index) => {
+        const fileKey = `feeReceipt${index}`;
+        if (documentFiles[fileKey]) {
+          docFormData.append("feeReceipts", documentFiles[fileKey] as File);
+        }
+      });
+
+      const uploadResponse = await registrationAPI.uploadDocuments(docFormData);
+      toast.success(
+        uploadResponse.message || "Documents uploaded successfully!",
+      );
+
+      // Success - redirect to login
+      localStorage.removeItem("registrationData"); // Clear saved data
+      toast.success(
+        "Application submitted successfully! Please login with your credentials.",
+      );
+      setTimeout(() => {
+        navigate("/login");
+      }, 2000);
+    } catch (error: any) {
+      console.error("Submission failed:", error);
+      const errorMessage =
+        error.response?.data?.message ||
+        "Failed to submit application. Please try again.";
+      toast.error(errorMessage);
+    } finally {
       setIsLoading(false);
-      toast.success("Application submitted successfully!");
-      navigate("/student");
-    }, 2000);
+    }
   };
 
   const renderStepContent = () => {
@@ -683,7 +911,7 @@ const Register = () => {
                   onClick={() => {
                     // TODO: Add actual PDF download link
                     toast.info(
-                      "Performance in Class 12th form will be downloaded"
+                      "Performance in Class 12th form will be downloaded",
                     );
                   }}
                 >
@@ -823,10 +1051,9 @@ const Register = () => {
                             size="sm"
                             variant="outline"
                             className="h-7 text-xs"
-                            onClick={() => {
-                              toast.info(`Viewing ${doc.label}`);
-                              // TODO: Implement actual document viewer
-                            }}
+                            onClick={() =>
+                              handleDocumentPreview(doc.key, doc.label)
+                            }
                           >
                             <Eye className="w-3 h-3 mr-1" />
                             View
@@ -835,22 +1062,40 @@ const Register = () => {
                             size="sm"
                             variant="outline"
                             className="h-7 text-xs text-destructive hover:text-destructive"
-                            onClick={() => updateFormData(doc.key, false)}
+                            onClick={() => handleFileRemove(doc.key)}
                           >
                             Remove
                           </Button>
                         </div>
                       )}
                       {!formData[doc.key as keyof typeof formData] && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs mt-2"
-                          onClick={() => updateFormData(doc.key, true)}
-                        >
-                          <Upload className="w-3 h-3 mr-1" />
-                          Upload
-                        </Button>
+                        <>
+                          <input
+                            type="file"
+                            id={`file-${doc.key}`}
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                handleFileUpload(doc.key, file);
+                              }
+                            }}
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs mt-2"
+                            onClick={() =>
+                              document
+                                .getElementById(`file-${doc.key}`)
+                                ?.click()
+                            }
+                          >
+                            <Upload className="w-3 h-3 mr-1" />
+                            Upload
+                          </Button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -871,18 +1116,35 @@ const Register = () => {
                         receipts if needed
                       </p>
                     </div>
+                    <input
+                      type="file"
+                      id="fee-receipt-input"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const current =
+                            formData.feePaymentReceiptsUploaded as boolean[];
+                          const newIndex = current.length;
+                          const fileKey = `feeReceipt${newIndex}`;
+
+                          handleFileUpload(fileKey, file);
+                          updateFormData("feePaymentReceiptsUploaded", [
+                            ...current,
+                            true,
+                          ]);
+                        }
+                        // Reset input
+                        e.target.value = "";
+                      }}
+                    />
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => {
-                        const current =
-                          formData.feePaymentReceiptsUploaded as boolean[];
-                        updateFormData("feePaymentReceiptsUploaded", [
-                          ...current,
-                          true,
-                        ]);
-                        toast.success("Fee receipt added");
-                      }}
+                      onClick={() =>
+                        document.getElementById("fee-receipt-input")?.click()
+                      }
                     >
                       <Upload className="w-4 h-4 mr-2" />
                       Add Receipt
@@ -896,60 +1158,71 @@ const Register = () => {
                       </p>
                     ) : (
                       (formData.feePaymentReceiptsUploaded as boolean[]).map(
-                        (_, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center justify-between p-3 bg-white border border-success/20 rounded-lg"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center">
-                                <Check className="w-4 h-4 text-success" />
+                        (_, index) => {
+                          const fileKey = `feeReceipt${index}`;
+                          const fileName =
+                            documentFiles[fileKey]?.name ||
+                            `Fee Receipt #${index + 1}`;
+
+                          return (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between p-3 bg-white border border-success/20 rounded-lg"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center">
+                                  <Check className="w-4 h-4 text-success" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-foreground">
+                                    {fileName}
+                                  </p>
+                                  <p className="text-xs text-success">
+                                    ✓ Uploaded
+                                  </p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="text-sm font-medium text-foreground">
-                                  Fee Receipt #{index + 1}
-                                </p>
-                                <p className="text-xs text-success">
-                                  ✓ Uploaded
-                                </p>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    handleDocumentPreview(
+                                      fileKey,
+                                      `Fee Receipt #${index + 1}`,
+                                    )
+                                  }
+                                >
+                                  <Eye className="w-4 h-4 mr-1" />
+                                  View
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-destructive hover:text-destructive"
+                                  onClick={() => {
+                                    const current =
+                                      formData.feePaymentReceiptsUploaded as boolean[];
+                                    const updated = current.filter(
+                                      (_, i) => i !== index,
+                                    );
+
+                                    // Remove file from documentFiles
+                                    handleFileRemove(fileKey);
+
+                                    updateFormData(
+                                      "feePaymentReceiptsUploaded",
+                                      updated,
+                                    );
+                                    toast.info("Receipt removed");
+                                  }}
+                                >
+                                  Remove
+                                </Button>
                               </div>
                             </div>
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  toast.info(
-                                    `Viewing Fee Receipt #${index + 1}`
-                                  );
-                                  // TODO: Implement actual document viewer
-                                }}
-                              >
-                                <Eye className="w-4 h-4 mr-1" />
-                                View
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="text-destructive hover:text-destructive"
-                                onClick={() => {
-                                  const current =
-                                    formData.feePaymentReceiptsUploaded as boolean[];
-                                  const updated = current.filter(
-                                    (_, i) => i !== index
-                                  );
-                                  updateFormData(
-                                    "feePaymentReceiptsUploaded",
-                                    updated
-                                  );
-                                  toast.info("Receipt removed");
-                                }}
-                              >
-                                Remove
-                              </Button>
-                            </div>
-                          </div>
-                        )
+                          );
+                        },
                       )
                     )}
                   </div>
@@ -985,12 +1258,20 @@ const Register = () => {
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                   <div>
-                    <span className="text-muted-foreground font-medium">Email:</span>{" "}
-                    <span className="text-foreground">{formData.email || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Email:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.email || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Phone:</span>{" "}
-                    <span className="text-foreground">{formData.phone || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Phone:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.phone || "Not provided"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1003,60 +1284,116 @@ const Register = () => {
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                   <div>
-                    <span className="text-muted-foreground font-medium">Full Name:</span>{" "}
-                    <span className="text-foreground">{formData.fullName || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Full Name:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.fullName || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Father's Name:</span>{" "}
-                    <span className="text-foreground">{formData.fatherName || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Father's Name:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.fatherName || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Mother's Name:</span>{" "}
-                    <span className="text-foreground">{formData.motherName || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Mother's Name:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.motherName || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Parent's Contact:</span>{" "}
-                    <span className="text-foreground">{formData.parentsContact || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Parent's Contact:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.parentsContact || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Parent's Email:</span>{" "}
-                    <span className="text-foreground">{formData.parentsEmail || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Parent's Email:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.parentsEmail || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Date of Birth:</span>{" "}
-                    <span className="text-foreground">{formData.dob || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Date of Birth:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.dob || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Gender:</span>{" "}
-                    <span className="text-foreground capitalize">{formData.gender || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Gender:
+                    </span>{" "}
+                    <span className="text-foreground capitalize">
+                      {formData.gender || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Category:</span>{" "}
-                    <span className="text-foreground uppercase">{formData.category || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Category:
+                    </span>{" "}
+                    <span className="text-foreground uppercase">
+                      {formData.category || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Blood Group:</span>{" "}
-                    <span className="text-foreground">{formData.bloodGroup || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Blood Group:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.bloodGroup || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Aadhar Number:</span>{" "}
-                    <span className="text-foreground">{formData.aadhar || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Aadhar Number:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.aadhar || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">State:</span>{" "}
-                    <span className="text-foreground capitalize">{formData.state || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      State:
+                    </span>{" "}
+                    <span className="text-foreground capitalize">
+                      {formData.state || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Branch Allocated:</span>{" "}
-                    <span className="text-foreground">{formData.branch || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Branch Allocated:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.branch || "Not provided"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium">Seat Allocated Through:</span>{" "}
-                    <span className="text-foreground">{formData.seatAllocated || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Seat Allocated Through:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.seatAllocated || "Not provided"}
+                    </span>
                   </div>
                   <div className="md:col-span-2">
-                    <span className="text-muted-foreground font-medium">Address:</span>{" "}
-                    <span className="text-foreground">{formData.address || "Not provided"}</span>
+                    <span className="text-muted-foreground font-medium">
+                      Address:
+                    </span>{" "}
+                    <span className="text-foreground">
+                      {formData.address || "Not provided"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1070,55 +1407,101 @@ const Register = () => {
                 <div className="space-y-4">
                   {/* Class 10 */}
                   <div className="border-b border-border pb-3">
-                    <p className="text-sm font-medium text-foreground mb-2">Class 10th</p>
+                    <p className="text-sm font-medium text-foreground mb-2">
+                      Class 10th
+                    </p>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                       <div>
-                        <span className="text-muted-foreground font-medium">Board:</span>{" "}
-                        <span className="text-foreground">{formData.board10 || "Not provided"}</span>
+                        <span className="text-muted-foreground font-medium">
+                          Board:
+                        </span>{" "}
+                        <span className="text-foreground">
+                          {formData.board10 || "Not provided"}
+                        </span>
                       </div>
                       <div>
-                        <span className="text-muted-foreground font-medium">Year:</span>{" "}
-                        <span className="text-foreground">{formData.year10 || "Not provided"}</span>
+                        <span className="text-muted-foreground font-medium">
+                          Year:
+                        </span>{" "}
+                        <span className="text-foreground">
+                          {formData.year10 || "Not provided"}
+                        </span>
                       </div>
                       <div>
-                        <span className="text-muted-foreground font-medium">Percentage:</span>{" "}
-                        <span className="text-foreground">{formData.percentage10 ? `${formData.percentage10}%` : "Not provided"}</span>
+                        <span className="text-muted-foreground font-medium">
+                          Percentage:
+                        </span>{" "}
+                        <span className="text-foreground">
+                          {formData.percentage10
+                            ? `${formData.percentage10}%`
+                            : "Not provided"}
+                        </span>
                       </div>
                     </div>
                   </div>
                   {/* Class 12 */}
                   <div className="border-b border-border pb-3">
-                    <p className="text-sm font-medium text-foreground mb-2">Class 12th / Intermediate</p>
+                    <p className="text-sm font-medium text-foreground mb-2">
+                      Class 12th / Intermediate
+                    </p>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                       <div>
-                        <span className="text-muted-foreground font-medium">Board:</span>{" "}
-                        <span className="text-foreground">{formData.board12 || "Not provided"}</span>
+                        <span className="text-muted-foreground font-medium">
+                          Board:
+                        </span>{" "}
+                        <span className="text-foreground">
+                          {formData.board12 || "Not provided"}
+                        </span>
                       </div>
                       <div>
-                        <span className="text-muted-foreground font-medium">Stream:</span>{" "}
-                        <span className="text-foreground">{formData.stream12 || "Not provided"}</span>
+                        <span className="text-muted-foreground font-medium">
+                          Stream:
+                        </span>{" "}
+                        <span className="text-foreground">
+                          {formData.stream12 || "Not provided"}
+                        </span>
                       </div>
                       <div>
-                        <span className="text-muted-foreground font-medium">Year:</span>{" "}
-                        <span className="text-foreground">{formData.year12 || "Not provided"}</span>
+                        <span className="text-muted-foreground font-medium">
+                          Year:
+                        </span>{" "}
+                        <span className="text-foreground">
+                          {formData.year12 || "Not provided"}
+                        </span>
                       </div>
                       <div>
-                        <span className="text-muted-foreground font-medium">Percentage:</span>{" "}
-                        <span className="text-foreground">{formData.percentage12 ? `${formData.percentage12}%` : "Not provided"}</span>
+                        <span className="text-muted-foreground font-medium">
+                          Percentage:
+                        </span>{" "}
+                        <span className="text-foreground">
+                          {formData.percentage12
+                            ? `${formData.percentage12}%`
+                            : "Not provided"}
+                        </span>
                       </div>
                     </div>
                   </div>
                   {/* JEE */}
                   <div>
-                    <p className="text-sm font-medium text-foreground mb-2">JEE Main</p>
+                    <p className="text-sm font-medium text-foreground mb-2">
+                      JEE Main
+                    </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                       <div>
-                        <span className="text-muted-foreground font-medium">JEE Application Number:</span>{" "}
-                        <span className="text-foreground">{jeeApplicationNumber || "Not provided"}</span>
+                        <span className="text-muted-foreground font-medium">
+                          JEE Application Number:
+                        </span>{" "}
+                        <span className="text-foreground">
+                          {jeeApplicationNumber || "Not provided"}
+                        </span>
                       </div>
                       <div>
-                        <span className="text-muted-foreground font-medium">JEE Rank:</span>{" "}
-                        <span className="text-foreground">{formData.jeeRank || "Not provided"}</span>
+                        <span className="text-muted-foreground font-medium">
+                          JEE Rank:
+                        </span>{" "}
+                        <span className="text-foreground">
+                          {formData.jeeRank || "Not provided"}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1133,16 +1516,46 @@ const Register = () => {
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                   {[
-                    { key: "photographUploaded", label: "Passport Size Photograph" },
-                    { key: "admissionLetterUploaded", label: "Provisional Admission Letter" },
-                    { key: "marksheet10Uploaded", label: "Class 10th Marksheet" },
-                    { key: "marksheet12Uploaded", label: "Class 12th Marksheet" },
-                    { key: "jeeRankCardUploaded", label: "JEE Mains Rank Card" },
-                    { key: "casteCertificateUploaded", label: "Caste Certificate" },
-                    { key: "incomeCertificateUploaded", label: "Income Certificate" },
-                    { key: "medicalCertificateUploaded", label: "Medical Certificate" },
-                    { key: "antiRaggingFormUploaded", label: "Anti-Ragging Form" },
-                    { key: "performance12FormUploaded", label: "Performance in Class 12th Form" },
+                    {
+                      key: "photographUploaded",
+                      label: "Passport Size Photograph",
+                    },
+                    {
+                      key: "admissionLetterUploaded",
+                      label: "Provisional Admission Letter",
+                    },
+                    {
+                      key: "marksheet10Uploaded",
+                      label: "Class 10th Marksheet",
+                    },
+                    {
+                      key: "marksheet12Uploaded",
+                      label: "Class 12th Marksheet",
+                    },
+                    {
+                      key: "jeeRankCardUploaded",
+                      label: "JEE Mains Rank Card",
+                    },
+                    {
+                      key: "casteCertificateUploaded",
+                      label: "Caste Certificate",
+                    },
+                    {
+                      key: "incomeCertificateUploaded",
+                      label: "Income Certificate",
+                    },
+                    {
+                      key: "medicalCertificateUploaded",
+                      label: "Medical Certificate",
+                    },
+                    {
+                      key: "antiRaggingFormUploaded",
+                      label: "Anti-Ragging Form",
+                    },
+                    {
+                      key: "performance12FormUploaded",
+                      label: "Performance in Class 12th Form",
+                    },
                     { key: "aadharPhotoUploaded", label: "Aadhar Card" },
                   ].map((doc) => (
                     <div key={doc.key} className="flex items-center gap-2">
@@ -1151,19 +1564,38 @@ const Register = () => {
                       ) : (
                         <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
                       )}
-                      <span className={formData[doc.key as keyof typeof formData] ? "text-foreground" : "text-muted-foreground"}>
+                      <span
+                        className={
+                          formData[doc.key as keyof typeof formData]
+                            ? "text-foreground"
+                            : "text-muted-foreground"
+                        }
+                      >
                         {doc.label}
                       </span>
                     </div>
                   ))}
                   <div className="flex items-center gap-2">
-                    {(formData.feePaymentReceiptsUploaded as boolean[]).length > 0 ? (
+                    {(formData.feePaymentReceiptsUploaded as boolean[]).length >
+                    0 ? (
                       <Check className="w-4 h-4 text-success flex-shrink-0" />
                     ) : (
                       <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
                     )}
-                    <span className={(formData.feePaymentReceiptsUploaded as boolean[]).length > 0 ? "text-foreground" : "text-muted-foreground"}>
-                      Fee Payment Receipts ({(formData.feePaymentReceiptsUploaded as boolean[]).length} uploaded)
+                    <span
+                      className={
+                        (formData.feePaymentReceiptsUploaded as boolean[])
+                          .length > 0
+                          ? "text-foreground"
+                          : "text-muted-foreground"
+                      }
+                    >
+                      Fee Payment Receipts (
+                      {
+                        (formData.feePaymentReceiptsUploaded as boolean[])
+                          .length
+                      }{" "}
+                      uploaded)
                     </span>
                   </div>
                 </div>
@@ -1184,9 +1616,9 @@ const Register = () => {
                 className="text-sm text-amber-900 cursor-pointer font-medium"
               >
                 I hereby declare that all information provided above is true and
-                correct to the best of my knowledge. I understand that providing false 
-                information may result in immediate cancellation of my admission and 
-                further legal action.
+                correct to the best of my knowledge. I understand that providing
+                false information may result in immediate cancellation of my
+                admission and further legal action.
               </label>
             </div>
           </div>
@@ -1642,6 +2074,67 @@ const Register = () => {
             </p>
           </>
         )}
+
+        {/* Loading Modal */}
+        <Dialog open={isLoading} onOpenChange={() => {}}>
+          <DialogContent
+            className="sm:max-w-md"
+            onInteractOutside={(e) => e.preventDefault()}
+          >
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-3">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                Submitting Application
+              </DialogTitle>
+              <DialogDescription className="space-y-3 pt-4">
+                <p className="text-base font-medium">
+                  Please wait while we process your application...
+                </p>
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Do not refresh or close this page!</strong>
+                    <br />
+                    This process may take a few moments as we register your
+                    account and upload your documents.
+                  </AlertDescription>
+                </Alert>
+              </DialogDescription>
+            </DialogHeader>
+          </DialogContent>
+        </Dialog>
+
+        {/* Document Preview Dialog */}
+        <Dialog
+          open={!!previewDocument}
+          onOpenChange={() => setPreviewDocument(null)}
+        >
+          <DialogContent className="max-w-4xl max-h-[90vh]">
+            <DialogHeader>
+              <DialogTitle>Preview Document</DialogTitle>
+              <DialogDescription>{previewDocument?.name}</DialogDescription>
+            </DialogHeader>
+            <div className="mt-4 max-h-[70vh] overflow-auto">
+              {previewDocument?.file && (
+                <>
+                  {previewDocument.file.type === "application/pdf" ? (
+                    <iframe
+                      src={URL.createObjectURL(previewDocument.file)}
+                      className="w-full h-[600px] border rounded-lg"
+                      title="Document Preview"
+                    />
+                  ) : (
+                    <img
+                      src={URL.createObjectURL(previewDocument.file)}
+                      alt="Document Preview"
+                      className="w-full h-auto rounded-lg"
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

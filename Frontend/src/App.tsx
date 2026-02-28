@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import StudentDashboard from "./pages/Students/StudentDashboard";
+import Profile from "./pages/Students/Profile";
 import Documents from "./pages/Students/Documents";
 import FeePayments from "./pages/Students/FeePayments";
 import Notifications from "./pages/Students/Notifications";
@@ -22,9 +23,6 @@ import Verified from "./pages/Verifier/verified";
 import Rejected from "./pages/Verifier/rejected";
 import AccountancyDashboard from "./pages/Accountancy/AccountancyDashboard";
 import NotFound from "./pages/NotFound";
-import Pending from "./pages/Accountancy/Pending";
-import Approved from "./pages/Accountancy/Approved";
-import AccountancyRejected from "./pages/Accountancy/Rejected";
 
 const queryClient = new QueryClient();
 
@@ -40,6 +38,7 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/student" element={<StudentDashboard />} />
+            <Route path="/student/profile" element={<Profile />} />
             <Route path="/student/documents" element={<Documents />} />
             <Route path="/student/fee" element={<FeePayments />} />
             <Route path="/student/notifications" element={<Notifications />} />
@@ -53,12 +52,6 @@ const App = () => (
             <Route path="/verifier/verified" element={<Verified />} />
             <Route path="/verifier/rejected" element={<Rejected />} />
             <Route path="/accountancy" element={<AccountancyDashboard />} />
-            <Route path="/accountancy/pending" element={<Pending />} />
-            <Route path="/accountancy/approved" element={<Approved />} />
-            <Route
-              path="/accountancy/rejected"
-              element={<AccountancyRejected />}
-            />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

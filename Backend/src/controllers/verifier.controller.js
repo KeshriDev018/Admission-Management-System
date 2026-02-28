@@ -15,7 +15,267 @@ export const getMyPendingStudents = async (req, res) => {
       admissionStatus: "pending_verification",
     })
       .select(
-        "jeeApplicationNumber personal.fullName personal.category personal.branchAllocated createdAt",
+        "jeeApplicationNumber personal.fullName personal.category personal.branchAllocated admissionStatus documents createdAt",
+      )
+      .populate("user", "email");
+
+    res.json(students);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const getMyVerifiedStudents = async (req, res) => {
+  try {
+    const students = await Student.find({
+      assignedVerifier: req.user.id,
+      admissionStatus: "document_verified",
+    })
+      .select(
+        "jeeApplicationNumber personal.fullName personal.category personal.branchAllocated admissionStatus documents createdAt",
+      )
+      .populate("user", "email");
+
+    res.json(students);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const getRejectedNotReuploadedStudents = async (req, res) => {
+  try {
+    const students = await Student.find({
+      assignedVerifier: req.user.id,
+      $or: [
+        {
+          $and: [
+            { "documents.photo.status": "rejected" },
+            {
+              $or: [
+                { "documents.photo.reuploaded": false },
+                { "documents.photo.reuploaded": { $exists: false } },
+              ],
+            },
+          ],
+        },
+        {
+          $and: [
+            { "documents.admissionLetter.status": "rejected" },
+            {
+              $or: [
+                { "documents.admissionLetter.reuploaded": false },
+                { "documents.admissionLetter.reuploaded": { $exists: false } },
+              ],
+            },
+          ],
+        },
+        {
+          $and: [
+            { "documents.class10Marksheet.status": "rejected" },
+            {
+              $or: [
+                { "documents.class10Marksheet.reuploaded": false },
+                { "documents.class10Marksheet.reuploaded": { $exists: false } },
+              ],
+            },
+          ],
+        },
+        {
+          $and: [
+            { "documents.class12Marksheet.status": "rejected" },
+            {
+              $or: [
+                { "documents.class12Marksheet.reuploaded": false },
+                { "documents.class12Marksheet.reuploaded": { $exists: false } },
+              ],
+            },
+          ],
+        },
+        {
+          $and: [
+            { "documents.jeeRankCard.status": "rejected" },
+            {
+              $or: [
+                { "documents.jeeRankCard.reuploaded": false },
+                { "documents.jeeRankCard.reuploaded": { $exists: false } },
+              ],
+            },
+          ],
+        },
+        {
+          $and: [
+            { "documents.casteCertificate.status": "rejected" },
+            {
+              $or: [
+                { "documents.casteCertificate.reuploaded": false },
+                { "documents.casteCertificate.reuploaded": { $exists: false } },
+              ],
+            },
+          ],
+        },
+        {
+          $and: [
+            { "documents.incomeCertificate.status": "rejected" },
+            {
+              $or: [
+                { "documents.incomeCertificate.reuploaded": false },
+                {
+                  "documents.incomeCertificate.reuploaded": { $exists: false },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          $and: [
+            { "documents.medicalCertificate.status": "rejected" },
+            {
+              $or: [
+                { "documents.medicalCertificate.reuploaded": false },
+                {
+                  "documents.medicalCertificate.reuploaded": { $exists: false },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          $and: [
+            { "documents.antiRaggingForm.status": "rejected" },
+            {
+              $or: [
+                { "documents.antiRaggingForm.reuploaded": false },
+                { "documents.antiRaggingForm.reuploaded": { $exists: false } },
+              ],
+            },
+          ],
+        },
+        {
+          $and: [
+            { "documents.performanceForm.status": "rejected" },
+            {
+              $or: [
+                { "documents.performanceForm.reuploaded": false },
+                { "documents.performanceForm.reuploaded": { $exists: false } },
+              ],
+            },
+          ],
+        },
+        {
+          $and: [
+            { "documents.aadharCard.status": "rejected" },
+            {
+              $or: [
+                { "documents.aadharCard.reuploaded": false },
+                { "documents.aadharCard.reuploaded": { $exists: false } },
+              ],
+            },
+          ],
+        },
+        {
+          "documents.feeReceipts": {
+            $elemMatch: {
+              status: "rejected",
+              $or: [{ reuploaded: false }, { reuploaded: { $exists: false } }],
+            },
+          },
+        },
+      ],
+    })
+      .select(
+        "jeeApplicationNumber personal.fullName personal.category personal.branchAllocated documents createdAt",
+      )
+      .populate("user", "email");
+
+    res.json(students);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const getRejectedReuploadedStudents = async (req, res) => {
+  try {
+    const students = await Student.find({
+      assignedVerifier: req.user.id,
+      $or: [
+        {
+          $and: [
+            { "documents.photo.status": "rejected" },
+            { "documents.photo.reuploaded": true },
+          ],
+        },
+        {
+          $and: [
+            { "documents.admissionLetter.status": "rejected" },
+            { "documents.admissionLetter.reuploaded": true },
+          ],
+        },
+        {
+          $and: [
+            { "documents.class10Marksheet.status": "rejected" },
+            { "documents.class10Marksheet.reuploaded": true },
+          ],
+        },
+        {
+          $and: [
+            { "documents.class12Marksheet.status": "rejected" },
+            { "documents.class12Marksheet.reuploaded": true },
+          ],
+        },
+        {
+          $and: [
+            { "documents.jeeRankCard.status": "rejected" },
+            { "documents.jeeRankCard.reuploaded": true },
+          ],
+        },
+        {
+          $and: [
+            { "documents.casteCertificate.status": "rejected" },
+            { "documents.casteCertificate.reuploaded": true },
+          ],
+        },
+        {
+          $and: [
+            { "documents.incomeCertificate.status": "rejected" },
+            { "documents.incomeCertificate.reuploaded": true },
+          ],
+        },
+        {
+          $and: [
+            { "documents.medicalCertificate.status": "rejected" },
+            { "documents.medicalCertificate.reuploaded": true },
+          ],
+        },
+        {
+          $and: [
+            { "documents.antiRaggingForm.status": "rejected" },
+            { "documents.antiRaggingForm.reuploaded": true },
+          ],
+        },
+        {
+          $and: [
+            { "documents.performanceForm.status": "rejected" },
+            { "documents.performanceForm.reuploaded": true },
+          ],
+        },
+        {
+          $and: [
+            { "documents.aadharCard.status": "rejected" },
+            { "documents.aadharCard.reuploaded": true },
+          ],
+        },
+        {
+          "documents.feeReceipts": {
+            $elemMatch: {
+              status: "rejected",
+              reuploaded: true,
+            },
+          },
+        },
+      ],
+    })
+      .select(
+        "jeeApplicationNumber personal.fullName personal.category personal.branchAllocated documents createdAt",
       )
       .populate("user", "email");
 
@@ -45,7 +305,6 @@ export const getAssignedStudentDetails = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
 
 export const verifyDocument = async (req, res) => {
   try {
@@ -105,18 +364,18 @@ export const rejectDocument = async (req, res) => {
         message: "Rejection reason is required",
       });
 
-   let student;
+    let student;
 
-   if (req.user.role === "admin") {
-     // Admin can access ANY student
-     student = await Student.findById(studentId);
-   } else {
-     // Verifier can access ONLY assigned students
-     student = await Student.findOne({
-       _id: studentId,
-       assignedVerifier: req.user.id,
-     });
-   }
+    if (req.user.role === "admin") {
+      // Admin can access ANY student
+      student = await Student.findById(studentId);
+    } else {
+      // Verifier can access ONLY assigned students
+      student = await Student.findOne({
+        _id: studentId,
+        assignedVerifier: req.user.id,
+      });
+    }
 
     if (!student)
       return res.status(404).json({
@@ -132,6 +391,7 @@ export const rejectDocument = async (req, res) => {
 
     doc.status = "rejected";
     doc.remark = remark; // ⭐ REASON SAVED HERE
+    doc.reuploaded = false; // Reset reuploaded flag on rejection
 
     student.admissionStatus = "pending_verification";
 
@@ -219,6 +479,7 @@ export const rejectReceipt = async (req, res) => {
 
     receipt.status = "rejected";
     receipt.remark = remark;
+    receipt.reuploaded = false; // Reset reuploaded flag on rejection
 
     await student.save();
 

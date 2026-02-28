@@ -19,16 +19,14 @@ const VerifierSidebar = () => {
     {
       icon: FileCheck,
       label: "Pending Verification",
-      count: 12,
       link: "/verifier",
     },
     {
       icon: CheckCircle,
       label: "Verified",
-      count: 45,
       link: "/verifier/verified",
     },
-    { icon: XCircle, label: "Rejected", count: 8, link: "/verifier/rejected" },
+    { icon: XCircle, label: "Rejected", link: "/verifier/rejected" },
   ];
 
   return (
@@ -95,15 +93,6 @@ const VerifierSidebar = () => {
                     <item.icon className="w-5 h-5" />
                     {item.label}
                   </div>
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded-full ${
-                      isActive
-                        ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                        : "bg-sidebar-accent"
-                    }`}
-                  >
-                    {item.count}
-                  </span>
                 </button>
               </Link>
             );

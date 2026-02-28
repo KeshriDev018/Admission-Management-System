@@ -11,57 +11,28 @@ import {
   Eye,
   EyeOff,
   ArrowLeft,
-  Shield,
-  UserCheck,
-  Wallet,
-  User,
 } from "lucide-react";
 import { toast } from "sonner";
-
-type UserRole = "student" | "admin" | "verifier" | "accountancy";
-
-const roleInfo = {
-  student: {
-    icon: User,
-    label: "Student",
-    description: "Access your application",
-  },
-  admin: {
-    icon: Shield,
-    label: "Administrator",
-    description: "Full system control",
-  },
-  verifier: {
-    icon: UserCheck,
-    label: "Verifier",
-    description: "Document verification",
-  },
-  accountancy: {
-    icon: Wallet,
-    label: "Accountancy",
-    description: "Fee management",
-  },
-};
+import { authAPI } from "../lib/api";
 
 const Login = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<UserRole>("student");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulate login - in real app this would be Supabase auth
-    setTimeout(() => {
-      setIsLoading(false);
-      toast.success("Login successful!");
+    try {
+      const { role, name } = await authAPI.login(email, password);
 
-      // Navigate based on role
-      switch (selectedRole) {
+      toast.success(`Welcome back, ${name}!`);
+
+      // Navigate based on role from backend
+      switch (role) {
         case "admin":
           navigate("/admin");
           break;
@@ -74,7 +45,15 @@ const Login = () => {
         default:
           navigate("/student");
       }
-    }, 1500);
+    } catch (error: any) {
+      console.error("Login error:", error);
+      toast.error(
+        error.response?.data?.message ||
+          "Login failed. Please check your credentials.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -149,44 +128,8 @@ const Login = () => {
 
             <h2 className="text-2xl font-bold text-foreground mb-2">Sign In</h2>
             <p className="text-muted-foreground mb-6">
-              Choose your role and enter credentials
+              Enter your credentials to access your account
             </p>
-
-            {/* Role Selection */}
-            <div className="grid grid-cols-2 gap-2 mb-6">
-              {(Object.keys(roleInfo) as UserRole[]).map((role) => {
-                const RoleIcon = roleInfo[role].icon;
-                return (
-                  <button
-                    key={role}
-                    type="button"
-                    onClick={() => setSelectedRole(role)}
-                    className={`p-3 rounded-xl border-2 transition-all text-left ${
-                      selectedRole === role
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-muted-foreground/30"
-                    }`}
-                  >
-                    <RoleIcon
-                      className={`w-5 h-5 mb-1 ${
-                        selectedRole === role
-                          ? "text-primary"
-                          : "text-muted-foreground"
-                      }`}
-                    />
-                    <p
-                      className={`text-sm font-medium ${
-                        selectedRole === role
-                          ? "text-foreground"
-                          : "text-muted-foreground"
-                      }`}
-                    >
-                      {roleInfo[role].label}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">

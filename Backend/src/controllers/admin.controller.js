@@ -1,15 +1,12 @@
 import User from "../models/user.model.js";
 import bcrypt from "bcryptjs";
 
-
-
 import Student from "../models/studentProfile.model.js";
-
 
 export const getAdminDashboardStats = async (req, res) => {
   try {
     // =============================
-    // 🔢 Summary Cards
+    // Summary Cards
     // =============================
 
     const totalApplications = await Student.countDocuments();
@@ -29,7 +26,7 @@ export const getAdminDashboardStats = async (req, res) => {
     });
 
     // =============================
-    // 📊 Category Distribution
+    // Category Distribution
     // =============================
 
     const categoryStats = await Student.aggregate([
@@ -37,7 +34,7 @@ export const getAdminDashboardStats = async (req, res) => {
     ]);
 
     // =============================
-    // 📊 State Distribution
+    // State Distribution
     // =============================
 
     const stateStats = await Student.aggregate([
@@ -47,7 +44,7 @@ export const getAdminDashboardStats = async (req, res) => {
     ]);
 
     // =============================
-    // 💰 Fee Payment Status
+    // Fee Payment Status
     // (Using Student.fee fields — since model has them)
     // =============================
 
@@ -63,7 +60,7 @@ export const getAdminDashboardStats = async (req, res) => {
     const notPaid = totalApplications - paid - halfPaid;
 
     // =============================
-    // 👥 Gender Distribution
+    //Gender Distribution
     // =============================
 
     const genderStats = await Student.aggregate([
@@ -71,7 +68,7 @@ export const getAdminDashboardStats = async (req, res) => {
     ]);
 
     // =============================
-    // 🆕 Recent Applications
+    // Recent Applications
     // =============================
 
     const recentApplications = await Student.find()
@@ -113,12 +110,12 @@ export const getRecentApplications = async (req, res) => {
 
     const filter = {};
 
-    // 🔍 Filter by admission status
+    //Filter by admission status
     if (status) {
       filter.admissionStatus = status;
     }
 
-    // 🔎 Search by name or JEE Application Number
+    // Search by name or JEE Application Number
     if (search) {
       filter.$or = [
         { "personal.fullName": { $regex: search, $options: "i" } },
@@ -154,7 +151,6 @@ export const createStaff = async (req, res) => {
   const { name, email, password, role } = req.body;
 
   try {
-    
     if (!["verifier", "accountancy"].includes(role))
       return res.status(400).json({
         message: "Invalid role",
@@ -190,12 +186,11 @@ export const getStudentsByStatus = async (req, res) => {
 
     const filter = {};
 
-    // 🧭 Filter by status (if not "all")
+    //Filter by status (if not "all")
     if (status && status !== "all") {
       filter.admissionStatus = status;
     }
 
-    // 🔍 Search
     if (search) {
       filter.$or = [
         { "personal.fullName": { $regex: search, $options: "i" } },
@@ -225,5 +220,109 @@ export const getStudentsByStatus = async (req, res) => {
     res.status(500).json({
       message: err.message,
     });
+  }
+};
+
+export const getStudentDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const student = await Student.findById(id)
+      .populate("user", "name email")
+      .populate("assignedVerifier", "name email")
+      .populate("assignedAccountant", "name email");
+
+    if (!student) {
+      return res.status(404).json({
+        message: "Student not found",
+      });
+    }
+
+    res.json(student);
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+    });
+  }
+};
+
+export const getAllVerifiers = async (req, res) => {
+  try {
+    const verifiers = await User.find({ role: "verifier" }).select("-password");
+    res.json({ verifiers });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const getAllAccountancy = async (req, res) => {
+  try {
+    const accountancy = await User.find({ role: "accountancy" }).select(
+      "-password",
+    );
+    res.json({ accountancy });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const getVerifierStudents = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const students = await Student.find({ assignedVerifier: id })
+      .populate("user", "name email")
+      .select(
+        "jeeApplicationNumber personal account admissionStatus createdAt",
+      );
+
+    res.json({ students });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const getAccountancyStudents = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const students = await Student.find({ assignedAccountant: id })
+      .populate("user", "name email")
+      .select(
+        "jeeApplicationNumber personal account admissionStatus fee createdAt",
+      );
+
+    res.json({ students });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const toggleStaffStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isActive } = req.body;
+
+    const user = await User.findById(id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (!["verifier", "accountancy"].includes(user.role)) {
+      return res.status(400).json({
+        message: "Can only toggle status for verifiers and accountancy staff",
+      });
+    }
+
+    user.isActive = isActive;
+    await user.save();
+
+    res.json({
+      message: `${user.role} ${isActive ? "activated" : "deactivated"} successfully`,
+      isActive: user.isActive,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };

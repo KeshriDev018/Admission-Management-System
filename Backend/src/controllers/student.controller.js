@@ -7,7 +7,6 @@ import {
 } from "../services/assignment.services.js";
 import Csab from "../models/CsabAllotment.model.js";
 
-
 export const verifyEligibility = async (req, res) => {
   try {
     const { jeeApplicationNumber } = req.body;
@@ -54,54 +53,48 @@ export const verifyEligibility = async (req, res) => {
   }
 };
 
-
 export const registerStudent = async (req, res) => {
   try {
-    const {
-      jeeApplicationNumber,
-      account,
-      personal,
-      academic,
-      documents,
-      termsAccepted,
-    } = req.body;
+    const { jeeApplicationNumber, account, personal, academic, termsAccepted } =
+      req.body;
 
-    // 🔹 Validate required sections
     if (!jeeApplicationNumber || !account || !personal)
       return res.status(400).json({
         message: "Missing required data",
       });
 
-    // 🔹 Password match check
     if (account.password !== account.confirmPassword)
       return res.status(400).json({
         message: "Passwords do not match",
       });
 
-    // 🔹 Check email already exists
-    const existingUser = await User.findOne({
-      email: account.email,
-    });
-
+    // Email exists?
+    const existingUser = await User.findOne({ email: account.email });
     if (existingUser)
       return res.status(400).json({
         message: "Email already registered",
       });
 
-    // 🔹 Check JEE number already registered
+    // JEE number exists?
     const existingJee = await Student.findOne({
       jeeApplicationNumber,
     });
-
     if (existingJee)
       return res.status(400).json({
         message: "Already registered with this JEE number",
       });
 
-    // 🔹 Hash password
+    // Must exist in CSAB DB
+    const csabRecord = await Csab.findOne({ jeeApplicationNumber });
+    if (!csabRecord)
+      return res.status(400).json({
+        message: "Student not found in CSAB allotment",
+      });
+
+    // Hash password
     const hashedPassword = await bcrypt.hash(account.password, 10);
 
-    // 🔹 Create User account
+    // Create user
     const user = await User.create({
       name: personal.fullName,
       email: account.email,
@@ -109,28 +102,14 @@ export const registerStudent = async (req, res) => {
       role: "student",
     });
 
-    // 🔹 Transform documents into structured format
-    const formattedDocs = {
-      photo: { url: documents.photo },
-      admissionLetter: { url: documents.admissionLetter },
-      class10Marksheet: { url: documents.class10Marksheet },
-      class12Marksheet: { url: documents.class12Marksheet },
-      jeeRankCard: { url: documents.jeeRankCard },
-      casteCertificate: { url: documents.casteCertificate },
-      incomeCertificate: { url: documents.incomeCertificate },
-      medicalCertificate: { url: documents.medicalCertificate },
-      antiRaggingForm: { url: documents.antiRaggingForm },
-      performanceForm: { url: documents.performanceForm },
-      aadharCard: { url: documents.aadharCard },
-
-      feeReceipts: documents.feeReceipts?.map((url) => ({ url })) || [],
-    };
-
-    // 🔥 AUTO ASSIGN STAFF
+    // Auto assign staff
     const assignedVerifier = await assignVerifier();
     const assignedAccountant = await assignAccountant();
 
-    // 🔹 Create Student Profile
+    // Create empty document structure
+    const emptyDocs = {};
+
+    // Create student profile
     const student = await Student.create({
       user: user._id,
       jeeApplicationNumber,
@@ -140,38 +119,45 @@ export const registerStudent = async (req, res) => {
         phone: account.phone,
       },
 
-      personal,
-      academic,
-      documents: formattedDocs,
+      personal: {
+        fullName: personal.fullName,
+        fatherName: personal.fatherName,
+        motherName: personal.motherName,
+        parentContact: personal.parentContact,
+        parentEmail: personal.parentEmail,
+        dob: personal.dob,
+        gender: personal.gender,
+        category: personal.category,
+        bloodGroup: personal.bloodGroup,
+        aadharNumber: personal.aadharNumber,
+        state: personal.state,
+        branchAllocated: personal.branchAllocated,
+        seatAllocatedThrough: personal.seatAllocatedThrough,
+        address: personal.address,
+      },
+
+      academic: {
+        class10: academic.class10,
+        class12: academic.class12,
+        jeeRank: academic.jeeRank,
+      },
+
+      documents: emptyDocs, // will fill later
       termsAccepted,
       assignedVerifier,
       assignedAccountant,
     });
 
-    // ======================================
-    // 🔥 FETCH CSAB DATA + UPDATE FEE
-    // ======================================
+    // ===== Fee Calculation =====
 
-    const csabRecord = await Csab.findOne({
-      jeeApplicationNumber,
-    });
-
-    if (!csabRecord)
-      return res.status(400).json({
-        message: "Student not found in CSAB allotment",
-      });
-
-    // 💰 First semester fee from ENV
     const firstSemTotal = Number(process.env.FIRST_SEM_FEE);
 
-    // 💰 Paid earlier = SAF + PAF ONLY
     const paidEarlier =
       (csabRecord.josaaSeatAcceptanceFee || 0) +
       (csabRecord.partialAdmissionFee || 0);
 
     const institutePayable = firstSemTotal - paidEarlier;
 
-    // 🎯 Update fee object
     student.fee = {
       firstSemTotal,
       paidEarlier,
@@ -188,12 +174,80 @@ export const registerStudent = async (req, res) => {
       studentId: student._id,
     });
   } catch (err) {
-    // 🔥 Duplicate JEE Application Number
     if (err.code === 11000) {
       return res.status(400).json({
         message: "Student already registered with this JEE Application Number",
       });
     }
+    res.status(500).json({ message: err.message });
+  }
+};
+export const uploadDocuments = async (req, res) => {
+  try {
+    const { jeeApplicationNumber } = req.body;
+
+    // 🔴 Validate identifier
+    if (!jeeApplicationNumber) {
+      return res.status(400).json({
+        message: "JEE Application Number is required",
+      });
+    }
+
+    // 🔎 Find student by JEE number
+    const student = await Student.findOne({
+      jeeApplicationNumber,
+    });
+
+    if (!student) {
+      return res.status(404).json({
+        message: "Student not found",
+      });
+    }
+
+    const files = req.files || {};
+
+    // 🧩 Helper function to update single doc
+    const updateDoc = (key) => {
+      if (files[key] && files[key][0]) {
+        student.documents[key] = {
+          url: files[key][0].path, // Cloudinary URL
+          status: "pending",
+          remark: "",
+          reuploaded: true,
+          updatedAt: new Date(),
+        };
+      }
+    };
+
+    updateDoc("photo");
+    updateDoc("admissionLetter");
+    updateDoc("class10Marksheet");
+    updateDoc("class12Marksheet");
+    updateDoc("jeeRankCard");
+    updateDoc("casteCertificate");
+    updateDoc("incomeCertificate");
+    updateDoc("medicalCertificate");
+    updateDoc("antiRaggingForm");
+    updateDoc("performanceForm");
+    updateDoc("aadharCard");
+
+    // 💰 Multiple fee receipts
+    if (files.feeReceipts && files.feeReceipts.length > 0) {
+      student.documents.feeReceipts = files.feeReceipts.map((f) => ({
+        url: f.path,
+        status: "pending",
+        remark: "",
+        reuploaded: true,
+        updatedAt: new Date(),
+      }));
+    }
+
+    await student.save();
+
+    res.json({
+      message: "Documents uploaded successfully",
+    });
+  } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
@@ -252,7 +306,14 @@ export const getMyProfile = async (req, res) => {
         message: "Student profile not found",
       });
 
-    res.json(student);
+    // Get admin user (first admin in the system)
+    const admin = await User.findOne({ role: "admin" }).select("name email");
+
+    // Add admin info to response
+    const response = student.toObject();
+    response.adminContact = admin;
+
+    res.json(response);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -260,9 +321,9 @@ export const getMyProfile = async (req, res) => {
 
 export const reuploadDocument = async (req, res) => {
   try {
-    const { docType } = req.params; // e.g. "photo"
-    const { url } = req.body;
+    const { docType } = req.params;
 
+    // 🔎 Find student via logged-in user
     const student = await Student.findOne({
       user: req.user.id,
     });
@@ -279,14 +340,20 @@ export const reuploadDocument = async (req, res) => {
         message: "Invalid document type",
       });
 
-    // ❌ Allow reupload ONLY if rejected
+    // ❌ Allow only if rejected
     if (doc.status !== "rejected")
       return res.status(400).json({
         message: "Re-upload allowed only for rejected documents",
       });
 
-    // ✅ Overwrite
-    doc.url = url;
+    // ❌ Ensure file uploaded
+    if (!req.file)
+      return res.status(400).json({
+        message: "File is required",
+      });
+
+    // ✅ Update with new Cloudinary URL
+    doc.url = req.file.path;
     doc.status = "pending";
     doc.remark = "";
     doc.reuploaded = true;
@@ -302,15 +369,11 @@ export const reuploadDocument = async (req, res) => {
   }
 };
 
-export const uploadPayment = async (req, res) => {
+export const reuploadFeeReceipt = async (req, res) => {
   try {
-    const { amount } = req.body;
+    const { index } = req.params;
 
-    if (!amount)
-      return res.status(400).json({
-        message: "Payment amount is required",
-      });
-
+    // 🔎 Find student via logged-in user
     const student = await Student.findOne({
       user: req.user.id,
     });
@@ -320,27 +383,102 @@ export const uploadPayment = async (req, res) => {
         message: "Student not found",
       });
 
+    const receiptIndex = parseInt(index);
+
+    if (
+      isNaN(receiptIndex) ||
+      receiptIndex < 0 ||
+      !student.documents.feeReceipts[receiptIndex]
+    )
+      return res.status(400).json({
+        message: "Invalid fee receipt index",
+      });
+
+    const receipt = student.documents.feeReceipts[receiptIndex];
+
+    // ❌ Allow only if rejected
+    if (receipt.status !== "rejected")
+      return res.status(400).json({
+        message: "Re-upload allowed only for rejected receipts",
+      });
+
+    // ❌ Ensure file uploaded
+    if (!req.file)
+      return res.status(400).json({
+        message: "File is required",
+      });
+
+    // ✅ Update with new Cloudinary URL
+    receipt.url = req.file.path;
+    receipt.status = "pending";
+    receipt.remark = "";
+    receipt.reuploaded = true;
+    receipt.updatedAt = new Date();
+
+    await student.save();
+
+    res.json({
+      message: "Fee receipt re-uploaded successfully",
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const uploadPayment = async (req, res) => {
+  try {
+    const { amount } = req.body;
+
+    // 🔴 Validate amount
+    if (!amount || isNaN(amount) || Number(amount) <= 0) {
+      return res.status(400).json({
+        message: "Valid payment amount is required",
+      });
+    }
+
+    // 🔴 Validate receipt file
+    if (!req.file) {
+      return res.status(400).json({
+        message: "Payment receipt file is required",
+      });
+    }
+
+    // 🔎 Find logged-in student's profile
+    const student = await Student.findOne({
+      user: req.user.id,
+    });
+
+    if (!student) {
+      return res.status(404).json({
+        message: "Student not found",
+      });
+    }
+
     // ❗ Prevent payment if already admitted
-    if (student.admissionStatus === "admitted")
+    if (student.admissionStatus === "admitted") {
       return res.status(400).json({
         message: "Admission already completed",
       });
+    }
+
+    const paymentAmount = Number(amount);
 
     // ==============================
     // 💰 Add payment entry
     // ==============================
 
     student.payments.push({
-      amount: Number(amount),
+      amount: paymentAmount,
       receiptUrl: req.file.path, // ⭐ Cloudinary URL
       status: "pending",
     });
 
     // ==============================
-    // 🔄 Update fee tracking
+    // 🔄 Update fee tracking safely
     // ==============================
 
-    student.fee.pendingVerification += Number(amount);
+    student.fee.pendingVerification =
+      (student.fee.pendingVerification || 0) + paymentAmount;
 
     student.admissionStatus = "payment_pending";
 

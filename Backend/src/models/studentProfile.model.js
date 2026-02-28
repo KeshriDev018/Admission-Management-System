@@ -43,8 +43,7 @@ const studentProfileSchema = new mongoose.Schema({
   // 🔹 Phase 3 Step 1 — Account
   account: {
     email: { type: String, required: true, unique: true },
-    phone: { type: String, required: true },
-    password: { type: String, required: true },
+    phone: { type: String, required: true }
   },
 
   // 🔹 Step 2 — Personal Details

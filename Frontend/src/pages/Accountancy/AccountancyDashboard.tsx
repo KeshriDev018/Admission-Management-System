@@ -1,119 +1,106 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Search,
-  Filter,
-  DollarSign,
   CheckCircle,
   Clock,
   XCircle,
-  User,
+  Eye,
+  AlertCircle,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import AccountancySidebar from "./Sidebar";
+import StudentDetailsDialog from "./StudentDetailsDialog.tsx";
+import { accountancyAPI } from "@/lib/api";
 
-const students = [
-  {
-    id: "IIITDWD-2025-00156",
-    name: "Priya Sharma",
-    feeStatus: "not_paid",
-    category: "General",
-    course: "B.Tech CSE",
-    totalFee: 150000,
-    paidAmount: 0,
-  },
-  {
-    id: "IIITDWD-2025-00155",
-    name: "Amit Kumar",
-    feeStatus: "half_paid",
-    category: "OBC-NCL",
-    course: "B.Tech ECE",
-    totalFee: 125000,
-    paidAmount: 62500,
-    remark: "First installment received via SBI Collect",
-  },
-  {
-    id: "IIITDWD-2025-00154",
-    name: "Sara Ahmed",
-    feeStatus: "paid",
-    category: "General",
-    course: "B.Tech CSE",
-    totalFee: 150000,
-    paidAmount: 150000,
-    remark: "Full payment received",
-  },
-  {
-    id: "IIITDWD-2025-00153",
-    name: "Ravi Patel",
-    feeStatus: "not_paid",
-    category: "EWS",
-    course: "B.Tech IT",
-    totalFee: 75000,
-    paidAmount: 0,
-  },
-];
+type TabType = "pending" | "rejected" | "admitted";
 
 const AccountancyDashboard = () => {
-  const [selectedStudent, setSelectedStudent] = useState<
-    (typeof students)[0] | null
-  >(null);
-  const [newStatus, setNewStatus] = useState("");
-  const [remark, setRemark] = useState("");
+  const [activeTab, setActiveTab] = useState<TabType>("pending");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [students, setStudents] = useState<any[]>([]);
+  const [selectedStudent, setSelectedStudent] = useState<any | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  const handleUpdateStatus = () => {
-    if (!newStatus) {
-      toast.error("Please select a status");
-      return;
+  // Stats
+  const [pendingCount, setPendingCount] = useState(0);
+  const [rejectedCount, setRejectedCount] = useState(0);
+  const [admittedCount, setAdmittedCount] = useState(0);
+
+  useEffect(() => {
+    fetchStudents();
+  }, [activeTab]);
+
+  useEffect(() => {
+    fetchCounts();
+  }, []);
+
+  const fetchCounts = async () => {
+    try {
+      const [pending, rejected, admitted] = await Promise.all([
+        accountancyAPI.getMyPaymentStudents(),
+        accountancyAPI.getMyRejectedPaymentStudents(),
+        accountancyAPI.getMyAdmittedStudents(),
+      ]);
+      setPendingCount(pending.length);
+      setRejectedCount(rejected.length);
+      setAdmittedCount(admitted.length);
+    } catch (error: any) {
+      console.error("Failed to fetch counts:", error);
     }
-    toast.success("Fee status updated successfully");
-    setIsDialogOpen(false);
-    setNewStatus("");
-    setRemark("");
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "paid":
-        return (
-          <Badge className="bg-success/10 text-success border-success/20">
-            Fully Paid
-          </Badge>
-        );
-      case "half_paid":
-        return (
-          <Badge className="bg-warning/10 text-warning border-warning/20">
-            Partially Paid
-          </Badge>
-        );
-      case "not_paid":
-        return (
-          <Badge className="bg-destructive/10 text-destructive border-destructive/20">
-            Not Paid
-          </Badge>
-        );
-      default:
-        return null;
+  const fetchStudents = async () => {
+    try {
+      setLoading(true);
+      let data;
+      if (activeTab === "pending") {
+        data = await accountancyAPI.getMyPaymentStudents();
+      } else if (activeTab === "rejected") {
+        data = await accountancyAPI.getMyRejectedPaymentStudents();
+      } else {
+        data = await accountancyAPI.getMyAdmittedStudents();
+      }
+      setStudents(data);
+    } catch (error: any) {
+      console.error("Failed to fetch students:", error);
+      toast.error(error.response?.data?.message || "Failed to load students");
+    } finally {
+      setLoading(false);
     }
   };
+
+  const handleViewDetails = async (student: any) => {
+    try {
+      const details = await accountancyAPI.getPaymentDetails(student._id);
+      setSelectedStudent(details);
+      setIsDialogOpen(true);
+    } catch (error: any) {
+      console.error("Failed to fetch student details:", error);
+      toast.error(
+        error.response?.data?.message || "Failed to load student details",
+      );
+    }
+  };
+
+  const handleRefresh = () => {
+    fetchStudents();
+    fetchCounts();
+  };
+
+  const filteredStudents = students.filter((student) => {
+    const query = searchQuery.toLowerCase();
+    return (
+      student.personal?.fullName?.toLowerCase().includes(query) ||
+      student.jeeApplicationNumber?.toLowerCase().includes(query) ||
+      student.user?.email?.toLowerCase().includes(query)
+    );
+  });
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-IN", {
@@ -125,274 +112,278 @@ const AccountancyDashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Sidebar */}
       <AccountancySidebar />
 
-      {/* Main Content */}
-      <main className="lg:ml-64 min-h-screen">
-        {/* Header */}
-        <header className="bg-card border-b border-border px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">
-                Fee Management
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Track and update student payment status
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-warning flex items-center justify-center text-warning-foreground font-semibold">
-                AC
-              </div>
-            </div>
-          </div>
-        </header>
-
+      <main className="lg:ml-64 min-h-screen pt-20 lg:pt-0">
         <div className="p-6">
-          {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            {[
-              {
-                icon: DollarSign,
-                label: "Total Collection",
-                value: "₹2.4 Cr",
-                color: "bg-primary/10 text-primary",
-              },
-              {
-                icon: CheckCircle,
-                label: "Fully Paid",
-                value: "156",
-                color: "bg-success/10 text-success",
-              },
-              {
-                icon: Clock,
-                label: "Partially Paid",
-                value: "42",
-                color: "bg-warning/10 text-warning",
-              },
-              {
-                icon: XCircle,
-                label: "Not Paid",
-                value: "82",
-                color: "bg-destructive/10 text-destructive",
-              },
-            ].map((stat, index) => (
-              <motion.div
-                key={stat.label}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className="bg-card border border-border rounded-xl p-6"
-              >
-                <div
-                  className={`w-12 h-12 rounded-xl ${stat.color} flex items-center justify-center mb-4`}
-                >
-                  <stat.icon className="w-6 h-6" />
-                </div>
-                <h3 className="text-2xl font-bold text-foreground">
-                  {stat.value}
-                </h3>
-                <p className="text-sm text-muted-foreground">{stat.label}</p>
-              </motion.div>
-            ))}
-          </div>
-
-          {/* Search & Filter */}
-          <div className="flex items-center gap-3 mb-6">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by Application ID or Name..."
-                className="pl-9"
-              />
-            </div>
-            <Select defaultValue="all">
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Filter Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="paid">Fully Paid</SelectItem>
-                <SelectItem value="half_paid">Half Paid</SelectItem>
-                <SelectItem value="not_paid">Not Paid</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button variant="outline" size="icon">
-              <Filter className="w-4 h-4" />
-            </Button>
-          </div>
-
-          {/* Students Table */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="bg-card border border-border rounded-xl overflow-hidden"
+            className="max-w-7xl mx-auto"
           >
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Student
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Course
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Total Fee
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Paid
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Pending
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {students.map((student) => (
-                    <tr
-                      key={student.id}
-                      className="hover:bg-muted/30 transition-colors"
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                            <User className="w-5 h-5 text-primary" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-foreground">
-                              {student.name}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {student.id}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
-                        {student.course}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-foreground">
-                        {formatCurrency(student.totalFee)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-success font-medium">
-                        {formatCurrency(student.paidAmount)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-destructive font-medium">
-                        {formatCurrency(student.totalFee - student.paidAmount)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(student.feeStatus)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedStudent(student);
-                            setIsDialogOpen(true);
-                          }}
-                        >
-                          Update Status
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {/* Header */}
+            <div className="mb-6">
+              <h1 className="text-3xl font-bold text-foreground">
+                Payment Verification
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Manage student fee payments and admission status
+              </p>
             </div>
+
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="bg-gradient-to-br from-yellow-500/10 to-yellow-600/5 border border-yellow-500/20 rounded-xl p-4"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Pending Payments
+                    </p>
+                    <p className="text-2xl font-bold text-yellow-600 mt-1">
+                      {pendingCount}
+                    </p>
+                  </div>
+                  <div className="w-12 h-12 bg-yellow-500/10 rounded-full flex items-center justify-center">
+                    <Clock className="w-6 h-6 text-yellow-600" />
+                  </div>
+                </div>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="bg-gradient-to-br from-red-500/10 to-red-600/5 border border-red-500/20 rounded-xl p-4"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Rejected Payments
+                    </p>
+                    <p className="text-2xl font-bold text-red-600 mt-1">
+                      {rejectedCount}
+                    </p>
+                  </div>
+                  <div className="w-12 h-12 bg-red-500/10 rounded-full flex items-center justify-center">
+                    <XCircle className="w-6 h-6 text-red-600" />
+                  </div>
+                </div>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/20 rounded-xl p-4"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Completed Admissions
+                    </p>
+                    <p className="text-2xl font-bold text-blue-600 mt-1">
+                      {admittedCount}
+                    </p>
+                  </div>
+                  <div className="w-12 h-12 bg-blue-500/10 rounded-full flex items-center justify-center">
+                    <CheckCircle className="w-6 h-6 text-blue-600" />
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-2 mb-6 overflow-x-auto">
+              <button
+                onClick={() => setActiveTab("pending")}
+                className={`px-6 py-2.5 rounded-lg font-medium transition-all whitespace-nowrap ${
+                  activeTab === "pending"
+                    ? "bg-yellow-600 text-white"
+                    : "bg-card border border-border text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  <span>Pending ({pendingCount})</span>
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab("rejected")}
+                className={`px-6 py-2.5 rounded-lg font-medium transition-all whitespace-nowrap ${
+                  activeTab === "rejected"
+                    ? "bg-red-600 text-white"
+                    : "bg-card border border-border text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>Rejected ({rejectedCount})</span>
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab("admitted")}
+                className={`px-6 py-2.5 rounded-lg font-medium transition-all whitespace-nowrap ${
+                  activeTab === "admitted"
+                    ? "bg-blue-600 text-white"
+                    : "bg-card border border-border text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Admitted ({admittedCount})</span>
+                </div>
+              </button>
+            </div>
+
+            {/* Search */}
+            <div className="bg-card border border-border rounded-xl p-4 mb-6">
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 w-5 h-5 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name, JEE application number, or email..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            {/* Students Table */}
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+                  <p className="text-muted-foreground mt-4">Loading...</p>
+                </div>
+              </div>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-card border border-border rounded-xl overflow-hidden"
+              >
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                          JEE App. No.
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                          Student Name
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                          Branch
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                          Institute Payable
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                          Paid Now
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                          Pending Verification
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                          Remaining
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                          Action
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {filteredStudents.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={8}
+                            className="px-6 py-8 text-center text-muted-foreground"
+                          >
+                            No students found
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredStudents.map((student) => (
+                          <tr
+                            key={student._id}
+                            className="hover:bg-muted/30 transition-colors"
+                          >
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              {student.jeeApplicationNumber || "N/A"}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                  <Users className="w-4 h-4 text-primary" />
+                                </div>
+                                <div>
+                                  <p className="font-medium text-sm">
+                                    {student.personal?.fullName || "N/A"}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {student.user?.email || "N/A"}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              {student.personal?.branchAllocated || "N/A"}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              {formatCurrency(
+                                student.fee?.institutePayable || 0,
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">
+                              {formatCurrency(student.fee?.paidNow || 0)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-yellow-600 font-medium">
+                              {formatCurrency(
+                                student.fee?.pendingVerification || 0,
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium">
+                              {formatCurrency(student.fee?.remaining || 0)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleViewDetails(student)}
+                              >
+                                <Eye className="w-4 h-4 mr-1" />
+                                View Details
+                              </Button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </motion.div>
+            )}
           </motion.div>
         </div>
       </main>
 
-      {/* Update Status Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Update Fee Status</DialogTitle>
-            <DialogDescription>
-              Update payment status for {selectedStudent?.name} (
-              {selectedStudent?.id})
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 mt-4">
-            <div className="bg-muted/50 rounded-lg p-4 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Total Fee:</span>
-                <span className="font-medium text-foreground">
-                  {selectedStudent && formatCurrency(selectedStudent.totalFee)}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Paid Amount:</span>
-                <span className="font-medium text-success">
-                  {selectedStudent &&
-                    formatCurrency(selectedStudent.paidAmount)}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Pending:</span>
-                <span className="font-medium text-destructive">
-                  {selectedStudent &&
-                    formatCurrency(
-                      selectedStudent.totalFee - selectedStudent.paidAmount
-                    )}
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
-                New Status
-              </label>
-              <Select value={newStatus} onValueChange={setNewStatus}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="paid">Fully Paid</SelectItem>
-                  <SelectItem value="half_paid">Half Paid</SelectItem>
-                  <SelectItem value="not_paid">Not Paid</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
-                Remark
-              </label>
-              <Textarea
-                placeholder="Add payment remarks (e.g., SBI Collect transaction ID)..."
-                value={remark}
-                onChange={(e) => setRemark(e.target.value)}
-              />
-            </div>
-
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => setIsDialogOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button className="flex-1" onClick={handleUpdateStatus}>
-                Update Status
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Student Details Dialog */}
+      {selectedStudent && (
+        <StudentDetailsDialog
+          student={selectedStudent}
+          isOpen={isDialogOpen}
+          onClose={() => {
+            setIsDialogOpen(false);
+            setSelectedStudent(null);
+          }}
+          onRefresh={handleRefresh}
+        />
+      )}
     </div>
   );
 };

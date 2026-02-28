@@ -7,6 +7,7 @@ import {
   LogOut,
   Menu,
   X,
+  UserCircle,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useState } from "react";
@@ -14,6 +15,7 @@ import { Button } from "@/components/ui/button";
 
 const navItems = [
   { icon: User, label: "Dashboard", to: "/student" },
+  { icon: UserCircle, label: "Profile", to: "/student/profile" },
   { icon: FileText, label: "Documents", to: "/student/documents" },
   { icon: CreditCard, label: "Fee Payment", to: "/student/fee" },
   { icon: Bell, label: "Notifications", to: "/student/notifications" },

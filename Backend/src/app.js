@@ -39,12 +39,14 @@ import studentRoutes from "./routes/student.routes.js";
 import csabRoutes from "./routes/csab.routes.js";
 import verifierRoutes from "./routes/verifer.routes.js";
 import accountancyRoutes from "./routes/accountancy.routes.js";
+import adminRoutes from "./routes/admin.routes.js"
 
 app.use("/api/accountancy", accountancyRoutes);
 app.use("/api/verifier", verifierRoutes);
 app.use("/api/admin/csab", csabRoutes);
 app.use("/api/student", studentRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/admin",adminRoutes);
 
 
 
